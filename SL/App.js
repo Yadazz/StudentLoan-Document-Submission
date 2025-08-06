@@ -1,77 +1,72 @@
-import { StyleSheet, Text, View, TextInput, StatusBar } from "react-native"; // เปลี่ยนการนำเข้า StatusBar
-import { Ionicons } from "@expo/vector-icons"; // นำเข้า Ionicons สำหรับไอคอน
+import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { Ionicons } from "@expo/vector-icons"; // นำเข้า Ionicons สำหรับไอคอนของ Tab Bar
 
-export default function App() {
+// นำเข้าคอมโพเนนต์หน้าต่างๆ ที่เราสร้างไว้
+import HomeScreen from "./HomeScreen";
+import UploadScreen from "./UploadScreen";
+import SettingsScreen from "./SettingScreen"; // ตรวจสอบให้แน่ใจว่าชื่อไฟล์ถูกต้อง (SettingScreen.js หรือ SettingsScreen.js)
+
+// สร้าง Tab Navigator
+const Tab = createBottomTabNavigator();
+
+const App = () => {
   return (
-    <View style={styles.container}>
-      {/* ส่วนหัวสำหรับแถบค้นหาและไอคอนโปรไฟล์ */}
-      <View style={styles.header}>
-        {/* คอนเทนเนอร์สำหรับแถบค้นหา */}
-        <View style={styles.searchBarContainer}>
-          <Ionicons
-            name="search"
-            size={20}
-            color="#888"
-            style={styles.searchIcon}
-          />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="ค้นหา..." // ข้อความตัวอย่างในช่องค้นหา
-            placeholderTextColor="#888"
-          />
-        </View>
-        {/* ไอคอนโปรไฟล์ */}
-        <Ionicons name="person-circle-outline" size={30} color="#333" />
-      </View>
+    <NavigationContainer>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          headerShown: false, // ซ่อน Header bar ด้านบนของแต่ละหน้า
+          tabBarActiveTintColor: "#007AFF", // สีของไอคอนและข้อความเมื่อ Tab ถูกเลือก
+          tabBarInactiveTintColor: "gray", // สีเมื่อ Tab ไม่ถูกเลือก
+          tabBarStyle: {
+            paddingVertical: 5, // เพิ่ม padding แนวตั้ง
+            height: 60, // กำหนดความสูงของ Tab bar
+          },
+          tabBarLabelStyle: {
+            fontSize: 12, // ขนาดตัวอักษรของ Label
+            marginBottom: 5, // ระยะห่างจากไอคอน
+          },
+          tabBarIcon: ({ color, size }) => {
+            let iconName;
 
-      {/* เนื้อหาเดิมของแอป */}
-      <StatusBar style="auto" />
-    </View>
+            if (route.name === "หน้าหลัก") {
+              iconName = "home-outline"; // ไอคอนสำหรับหน้าหลัก
+            } else if (route.name === "ส่งเอกสาร") {
+              iconName = "document-text-outline"; // ไอคอนสำหรับหน้าส่งเอกสาร
+            } else if (route.name === "ตั้งค่า") {
+              iconName = "settings-outline"; // ไอคอนสำหรับหน้าตั้งค่า
+            }
+
+            // คืนค่าคอมโพเนนต์ไอคอน
+            return <Ionicons name={iconName} size={size} color={color} />;
+          },
+        })}
+      >
+        <Tab.Screen
+          name="หน้าหลัก"
+          component={HomeScreen}
+          options={{
+            title: "หน้าหลัก", // ชื่อที่จะแสดงบน Tab bar
+          }}
+        />
+        <Tab.Screen
+          name="ส่งเอกสาร"
+          component={UploadScreen}
+          options={{
+            title: "ส่งเอกสาร",
+          }}
+        />
+        <Tab.Screen
+          name="ตั้งค่า"
+          component={SettingsScreen}
+          options={{
+            title: "ตั้งค่า",
+          }}
+        />
+      </Tab.Navigator>
+    </NavigationContainer>
   );
-}
+};
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f0f2f5", // เปลี่ยนสีพื้นหลังเล็กน้อยเพื่อให้ดูดีขึ้น
-    paddingTop: 50, // เพิ่ม padding ด้านบนเพื่อหลีกเลี่ยง StatusBar
-    alignItems: "center",
-    // ไม่ต้อง justify-content: 'center' สำหรับ container หลักอีกต่อไป เพราะ header จะอยู่ด้านบน
-  },
-  header: {
-    flexDirection: "row", // จัดเรียงองค์ประกอบในแนวนอน
-    alignItems: "center", // จัดแนวตั้งให้อยู่ตรงกลาง
-    justifyContent: "space-between", // กระจายพื้นที่ระหว่างองค์ประกอบ
-    width: "90%", // กำหนดความกว้างของ header
-    paddingHorizontal: 10,
-    marginBottom: 20, // เพิ่มระยะห่างด้านล่าง
-  },
-  searchBarContainer: {
-    flexDirection: "row", // จัดเรียงไอคอนและ TextInput ในแนวนอน
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 25, // ทำให้ขอบมน
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    flex: 1, // ให้แถบค้นหาขยายเต็มพื้นที่ที่เหลือ
-    marginRight: 15, // ระยะห่างระหว่างแถบค้นหากับไอคอนโปรไฟล์
-    shadowColor: "#000", // เพิ่มเงาเล็กน้อย
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  searchIcon: {
-    marginRight: 10, // ระยะห่างระหว่างไอคอนแว่นขยายกับ TextInput
-  },
-  searchInput: {
-    flex: 1, // ทำให้ TextInput ขยายเต็มพื้นที่ที่เหลือ // กำหนดความสูงของ TextInput
-    fontSize: 16,
-    color: "#333",
-  },
-  mainContentText: {
-    marginTop: 20, // เพิ่มระยะห่างจาก header
-    fontSize: 16,
-    color: "#555",
-  },
-});
+export default App;
