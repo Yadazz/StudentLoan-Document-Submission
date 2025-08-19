@@ -1,54 +1,68 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 const DocRecScreen = () => {
-  const [step, setStep] = useState(1);
-  const [familyStatus, setFamilyStatus] = useState('');
-  const [livingWith, setLivingWith] = useState('');
-  const [fatherIncome, setFatherIncome] = useState('');
-  const [motherIncome, setMotherIncome] = useState('');
-  const [legalStatus, setLegalStatus] = useState('');
-  const [singleParentIncome, setSingleParentIncome] = useState('');
-  const [guardianIncome, setGuardianIncome] = useState('');
-  const [parentLegalStatus, setParentLegalStatus] = useState('');
+  // ตัวแปรเก็บสถานะ
+  const [step, setStep] = useState(1); // เก็บขั้นตอนปัจจุบัน
+  const [familyStatus, setFamilyStatus] = useState(''); // สถานะครอบครัว (ก, ข, ค)
+  const [livingWith, setLivingWith] = useState(''); // อาศัยอยู่กับใคร (บิดา/มารดา)
+  const [fatherIncome, setFatherIncome] = useState(''); // รายได้บิดา (มี/ไม่มี)
+  const [motherIncome, setMotherIncome] = useState(''); // รายได้มารดา (มี/ไม่มี)
+  const [legalStatus, setLegalStatus] = useState(''); // สถานะทางกฎหมาย (มี/ไม่มี)
+  const [guardianIncome, setGuardianIncome] = useState(''); // รายได้ผู้ปกครong
+  const [parentLegalStatus, setParentLegalStatus] = useState(''); // สถานะกฎหมายผู้ปกครอง
+  const navigation = useNavigation();
+  const route = useRoute();
 
-  // Function to get step navigation based on family status and current values
+  // === ฟังก์ชันกำหนดเส้นทางการนำทาง ===
   const getNavigationSteps = () => {
-    let steps = [1]; // Always start with step 1
+    let steps = [1]; // เริ่มต้นที่ขั้นตอน 1 เสมอ
     
+    // กรณี ก: บิดามารดาอยู่ด้วยกันปกติ
     if (familyStatus === 'ก') {
-      steps.push(2); // Father income question
-      if (fatherIncome) steps.push(3); // Mother income question
-      if (motherIncome) steps.push(4); // Results
-    } else if (familyStatus === 'ข') {
-      steps.push(5); // Living with question
-      if (livingWith) steps.push(6); // Legal status question
-      if (legalStatus) steps.push(7); // Single parent income question
-      if (singleParentIncome) steps.push(8); // Results
-    } else if (familyStatus === 'ค') {
-      steps.push(9); // Guardian income question
-      if (guardianIncome) steps.push(10); // Parent legal status question
-      if (parentLegalStatus) steps.push(11); // Results
+      steps.push(2); // ถามรายได้บิดา
+      if (fatherIncome) steps.push(3); // ถามรายได้มารดา
+      if (motherIncome) steps.push(4); // แสดงผลลัพธ์
+    } 
+    // กรณี ข: บิดา/มารดาหย่าร้าง/เลิกร้าง/เสียชีวิต
+    else if (familyStatus === 'ข') {
+      steps.push(5); // ถามว่าอาศัยอยู่กับใคร
+      if (livingWith) steps.push(6); // ถามสถานะทางกฎหมาย
+      if (legalStatus) steps.push(7); // ถามรายได้พ่อ/แม่เดี่ยว
+      if (
+        (livingWith === "บิดา" && fatherIncome) ||
+        (livingWith === "มารดา" && motherIncome)
+      ) steps.push(8); // แสดงผลลัพธ์
+    } 
+    // กรณี ค: มีผู้ปกครองที่ไม่ใช่บิดามารดา
+    else if (familyStatus === 'ค') {
+      steps.push(9); // ถามรายได้ผู้ปกครอง
+      if (guardianIncome) steps.push(10); // ถามสถานะกฎหมายของบิดามารดา
+      if (parentLegalStatus) steps.push(11); // แสดงผลลัพธ์
     }
     
     return steps;
   };
 
-  // Function to build the final document list
+  // === ฟังก์ชันสร้างรายการเอกสารที่ต้องใช้ ===
   const getDocuments = () => {
     let documents = [];
 
-    // Common documents for all cases
+    // เอกสารพื้นฐานที่ต้องใช้ทุกกรณี
     documents.push(
       "- แบบฟอร์ม กยศ. 101 (กรอกข้อมูลตามจริงให้ครบถ้วน)",
       "- เอกสารจิตอาสา (กิจกรรมในปีการศึกษา 2567 อย่างน้อย 1 รายการ)"
     );
 
+    // กรณี ก: ครอบครัวปกติ
     if (familyStatus === "ก") {
       documents.push(
         "- หนังสือยินยอมเปิดเผยข้อมูล ของ บิดา มารดา และผู้กู้ (คนละ 1 แผ่น)",
         "- สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้อง ของ บิดา มารดา และผู้กู้ (คนละ 1 แผ่น)"
       );
+      
+      // ถ้าบิดามีรายได้
       if (fatherIncome === "มี") {
         documents.push(
           "- หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของบิดา (เอกสารอายุไม่เกิน 3 เดือน)"
@@ -58,6 +72,8 @@ const DocRecScreen = () => {
           "- หนังสือรับรองรายได้ กยศ. 102 ของบิดา พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)"
         );
       }
+      
+      // ถ้ามารดามีรายได้
       if (motherIncome === "มี") {
         documents.push(
           "- หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของมารดา (เอกสารอายุไม่เกิน 3 เดือน)"
@@ -67,12 +83,16 @@ const DocRecScreen = () => {
           "- หนังสือรับรองรายได้ กยศ. 102 ของมารดา พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)"
         );
       }
-    } else if (familyStatus === "ข") {
+    } 
+    // กรณี ข: พ่อแม่หย่าร้าง/เลิกร้าง/เสียชีวิต
+    else if (familyStatus === "ข") {
       let parent = livingWith === "บิดา" ? "บิดา" : "มารดา";
       documents.push(
         `- หนังสือยินยอมเปิดเผยข้อมูล ของ ${parent} และผู้กู้ (คนละ 1 แผ่น)`,
         `- สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้อง ของ ${parent} และผู้กู้ (คนละ 1 แผ่น)`
       );
+      
+      // เอกสารแสดงสถานะทางกฎหมาย
       if (legalStatus === "มี") {
         documents.push(
           "- สำเนาใบหย่า (กรณีหย่าร้าง) หรือ สำเนาใบมรณบัตร (กรณีเสียชีวิต)"
@@ -82,7 +102,12 @@ const DocRecScreen = () => {
           "- หนังสือรับรองสถานภาพครอบครัว พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)"
         );
       }
-      if (singleParentIncome === "มี") {
+      
+      // เอกสารรายได้ของพ่อ/แม่เดี่ยว
+      if (
+        (livingWith === "บิดา" && fatherIncome === "มี") ||
+        (livingWith === "มารดา" && motherIncome === "มี")
+      ) {
         documents.push(
           `- หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของ${parent} (เอกสารอายุไม่เกิน 3 เดือน)`
         );
@@ -91,11 +116,15 @@ const DocRecScreen = () => {
           `- หนังสือรับรองรายได้ กยศ. 102 ของ${parent} พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)`
         );
       }
-    } else if (familyStatus === "ค") {
+    } 
+    // กรณี ค: มีผู้ปกครอง
+    else if (familyStatus === "ค") {
         documents.push(
           "- หนังสือยินยอมเปิดเผยข้อมูล ของ ผู้ปกครองและผู้กู้ (คนละ 1 แผ่น)",
           "- สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้อง ของ ผู้ปกครองและผู้กู้ (คนละ 1 แผ่น)"
         );
+        
+        // เอกสารรายได้ผู้ปกครอง
         if (guardianIncome === "มี") {
           documents.push(
             "- หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของผู้ปกครอง (เอกสารอายุไม่เกิน 3 เดือน)"
@@ -105,11 +134,15 @@ const DocRecScreen = () => {
             "- หนังสือรับรองรายได้ กยศ. 102 ของผู้ปกครอง พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)"
           );
         }
+        
+        // เอกสารสถานะกฎหมายของบิดามารดา
         if (parentLegalStatus === "มี") {
             documents.push(
                 "- สำเนาใบหย่า (กรณีหย่าร้าง) หรือ สำเนาใบมรณบัตร (กรณีเสียชีวิต)"
             );
         }
+        
+        // เอกสารแสดงสถานภาพครอบครัว (บังคับสำหรับกรณี ค)
         documents.push(
             "- หนังสือรับรองสถานภาพครอบครัว พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)"
         );
@@ -118,6 +151,7 @@ const DocRecScreen = () => {
     return documents;
   };
 
+  // === ฟังก์ชันเริ่มต้นใหม่ ===
   const handleRestart = () => {
     setStep(1);
     setFamilyStatus('');
@@ -125,11 +159,11 @@ const DocRecScreen = () => {
     setFatherIncome('');
     setMotherIncome('');
     setLegalStatus('');
-    setSingleParentIncome('');
     setGuardianIncome('');
     setParentLegalStatus('');
   };
 
+  // === ฟังก์ชันย้อนกลับ ===
   const handleBack = () => {
     const steps = getNavigationSteps();
     const currentIndex = steps.indexOf(step);
@@ -137,52 +171,58 @@ const DocRecScreen = () => {
     if (currentIndex > 0) {
       const previousStep = steps[currentIndex - 1];
       
-      // Reset state based on which step we're going back to
+      // รีเซ็ตค่าที่เกี่ยวข้องเมื่อย้อนกลับ
       if (step === 4 && familyStatus === 'ก') {
-        setMotherIncome('');
+        setMotherIncome(''); // ลบคำตอบรายได้มารดา
       } else if (step === 3 && familyStatus === 'ก') {
-        setFatherIncome('');
+        setFatherIncome(''); // ลบคำตอบรายได้บิดา
       } else if (step === 8 && familyStatus === 'ข') {
-        setSingleParentIncome('');
+        if (livingWith === "บิดา") {
+          setFatherIncome('');
+        } else if (livingWith === "มารดา") {
+          setMotherIncome('');
+        }
       } else if (step === 7 && familyStatus === 'ข') {
-        setLegalStatus('');
+        setLegalStatus(''); // ลบคำตอบสถานะกฎหมาย
       } else if (step === 6 && familyStatus === 'ข') {
-        setLivingWith('');
+        setLivingWith(''); // ลบคำตอบว่าอาศัยกับใคร
       } else if (step === 11 && familyStatus === 'ค') {
-        setParentLegalStatus('');
+        setParentLegalStatus(''); // ลบคำตอบสถานะกฎหมายบิดามารดา
       } else if (step === 10 && familyStatus === 'ค') {
-        setGuardianIncome('');
+        setGuardianIncome(''); // ลบคำตอบรายได้ผู้ปกครอง
       } else if (step === 5 || step === 9) {
-        setFamilyStatus('');
+        setFamilyStatus(''); // ลบคำตอบสถานะครอบครัว
       }
       
       setStep(previousStep);
     }
   };
 
+  // === ฟังก์ชันตรวจสอบว่าสามารถย้อนกลับได้หรือไม่ ===
   const canGoBack = () => {
     const steps = getNavigationSteps();
     const currentIndex = steps.indexOf(step);
     return currentIndex > 0;
   };
 
+  // === ฟังก์ชันคำนวณความคืบหน้า ===
   const getStepProgress = () => {
-    let totalSteps = 1; // Always has step 1
+    let totalSteps = 1; // มีขั้นตอน 1 เสมอ
     let currentStepNum = 1;
     
     if (familyStatus === 'ก') {
-      totalSteps = 4;
+      totalSteps = 4; // กรณี ก มี 4 ขั้นตอน
       if (step >= 2) currentStepNum = 2;
       if (step >= 3) currentStepNum = 3;
       if (step >= 4) currentStepNum = 4;
     } else if (familyStatus === 'ข') {
-      totalSteps = 4;
+      totalSteps = 4; // กรณี ข มี 4 ขั้นตอน
       if (step >= 5) currentStepNum = 2;
       if (step >= 6) currentStepNum = 3;
       if (step >= 7) currentStepNum = 4;
       if (step >= 8) currentStepNum = 4;
     } else if (familyStatus === 'ค') {
-      totalSteps = 4;
+      totalSteps = 4; // กรณี ค มี 4 ขั้นตอน
       if (step >= 9) currentStepNum = 2;
       if (step >= 10) currentStepNum = 3;
       if (step >= 11) currentStepNum = 4;
@@ -191,6 +231,7 @@ const DocRecScreen = () => {
     return { current: currentStepNum, total: totalSteps };
   };
 
+  // === คอมโพเนนต์แสดง Progress Bar ===
   const renderProgressBar = () => {
     const progress = getStepProgress();
     const percentage = (progress.current / progress.total) * 100;
@@ -205,59 +246,61 @@ const DocRecScreen = () => {
     );
   };
 
+  // === ฟังก์ชันแสดงเนื้อหาตามขั้นตอน ===
   const renderContent = () => {
+    // ตรวจสอบว่าเป็นขั้นตอนแสดงผลลัพธ์หรือไม่
     const isResultStep = (familyStatus === 'ก' && step === 4) || 
                         (familyStatus === 'ข' && step === 8) || 
                         (familyStatus === 'ค' && step === 11);
 
     switch (step) {
-      case 1:
+      case 1: // ขั้นตอนแรก - เลือกสถานะครอบครัว
         return (
           <View style={styles.card}>
             <Text style={styles.stepIndicator}>ขั้นตอนที่ 1</Text>
             <Text style={styles.question}>สถานภาพครอบครัวของคุณตรงกับข้อใด?</Text>
+            {/* ปุ่มเลือกตัวเลือกต่างๆ */}
             <TouchableOpacity 
               style={[styles.button, styles.primaryButton]} 
               onPress={() => { setFamilyStatus('ก'); setStep(2); }}
             >
-              <Text style={styles.buttonText}>ก. บิดาและมารดาอยู่ด้วยกันตามปกติ</Text>
+              <Text style={styles.buttonText}>บิดาและมารดาอยู่ด้วยกันตามปกติ</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.button, styles.primaryButton]} 
               onPress={() => { setFamilyStatus('ข'); setStep(5); }}
             >
-              <Text style={styles.buttonText}>ข. บิดาหรือมารดาหย่าร้าง/เลิกร้าง/เสียชีวิต หรือไม่สามารถติดต่อได้</Text>
+              <Text style={styles.buttonText}>บิดาหรือมารดาหย่าร้าง/เลิกร้าง/เสียชีวิต หรือไม่สามารถติดต่อได้</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.button, styles.primaryButton]} 
               onPress={() => { setFamilyStatus('ค'); setStep(9); }}
             >
-              <Text style={styles.buttonText}>ค. บิดามารดาเสียชีวิต/ไม่สามารถติดต่อได้ และมีผู้ปกครองที่ไม่ใช่บิดามารดาดูแล</Text>
+              <Text style={styles.buttonText}>บิดามารดาเสียชีวิต/ไม่สามารถติดต่อได้ และมีผู้ปกครองที่ไม่ใช่บิดามารดาดูแล</Text>
             </TouchableOpacity>
           </View>
         );
 
-      case 2: // Father income (Scenario A)
+      case 2: // กรณี ก - ถามรายได้บิดา
         return (
-          <View style={styles.card}>
-            <Text style={styles.stepIndicator}>ขั้นตอนที่ 2</Text>
-            <Text style={styles.question}>บิดาของคุณมีรายได้ประจำหรือไม่?</Text>
-            <TouchableOpacity 
-              style={[styles.button, styles.successButton]} 
-              onPress={() => { setFatherIncome('มี'); setStep(3); }}
-            >
-              <Text style={styles.buttonText}>มี</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.button, styles.warningButton]} 
-              onPress={() => { setFatherIncome('ไม่มี'); setStep(3); }}
-            >
-              <Text style={styles.buttonText}>ไม่มี</Text>
-            </TouchableOpacity>
-          </View>
-        );
-
-      case 3: // Mother income (Scenario A)
+            <View style={styles.card}>
+              <Text style={styles.stepIndicator}>ขั้นตอนที่ 2</Text>
+              <Text style={styles.question}>บิดาของคุณมีรายได้ประจำหรือไม่?</Text>
+              <TouchableOpacity 
+                style={[styles.button, styles.successButton]} 
+                onPress={() => { setFatherIncome('มี'); setStep(3); }}
+              >
+                <Text style={styles.buttonText}>มี</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.button, styles.warningButton]} 
+                onPress={() => { setFatherIncome('ไม่มี'); setStep(3); }}
+              >
+                <Text style={styles.buttonText}>ไม่มี</Text>
+              </TouchableOpacity>
+            </View>
+          );
+      case 3: // กรณี ก - ถามรายได้มารดา  
         return (
           <View style={styles.card}>
             <Text style={styles.stepIndicator}>ขั้นตอนที่ 3</Text>
@@ -276,8 +319,7 @@ const DocRecScreen = () => {
             </TouchableOpacity>
           </View>
         );
-
-      case 5: // Living with (Scenario B)
+      case 5: // กรณี ข - ถามว่าอาศัยกับใคร
         return (
           <View style={styles.card}>
             <Text style={styles.stepIndicator}>ขั้นตอนที่ 2</Text>
@@ -297,7 +339,7 @@ const DocRecScreen = () => {
           </View>
         );
 
-      case 6: // Legal status (Scenario B)
+      case 6: // กรณี ข - ถามสถานะทางกฎหมาย
         return (
           <View style={styles.card}>
             <Text style={styles.stepIndicator}>ขั้นตอนที่ 3</Text>
@@ -317,7 +359,7 @@ const DocRecScreen = () => {
           </View>
         );
 
-      case 7: // Single parent income (Scenario B)
+      case 7: // กรณี ข - ถามรายได้พ่อ/แม่เดี่ยว
         let parent = livingWith === "บิดา" ? "บิดา" : "มารดา";
         return (
           <View style={styles.card}>
@@ -325,20 +367,35 @@ const DocRecScreen = () => {
             <Text style={styles.question}>{parent} ของคุณมีรายได้ประจำหรือไม่?</Text>
             <TouchableOpacity 
               style={[styles.button, styles.successButton]} 
-              onPress={() => { setSingleParentIncome('มี'); setStep(8); }}
+              onPress={() => { 
+                if (livingWith === "บิดา") {
+                  setFatherIncome('มี'); 
+                } else {
+                  setMotherIncome('มี');
+                }
+                setStep(8); 
+              }}
             >
               <Text style={styles.buttonText}>มี</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.button, styles.warningButton]} 
-              onPress={() => { setSingleParentIncome('ไม่มี'); setStep(8); }}
+              onPress={() => { 
+                if (livingWith === "บิดา") {
+                  setFatherIncome('ไม่มี'); 
+                } else {
+                  setMotherIncome('ไม่มี');
+                }
+                setStep(8); 
+              }}
             >
               <Text style={styles.buttonText}>ไม่มี</Text>
             </TouchableOpacity>
           </View>
         );
 
-      case 9: // Guardian income (Scenario C)
+
+      case 9: // กรณี ค - ถามรายได้ผู้ปกครอง
         return (
           <View style={styles.card}>
             <Text style={styles.stepIndicator}>ขั้นตอนที่ 2</Text>
@@ -358,7 +415,7 @@ const DocRecScreen = () => {
           </View>
         );
 
-      case 10: // Parent legal status (Scenario C)
+      case 10: // กรณี ค - ถามสถานะกฎหมายบิดามารดา
         return (
           <View style={styles.card}>
             <Text style={styles.stepIndicator}>ขั้นตอนที่ 3</Text>
@@ -378,13 +435,24 @@ const DocRecScreen = () => {
           </View>
         );
 
-      case 4:
-      case 8:
-      case 11: // Results
+      case 4: // ผลลัพธ์กรณี ก
+      case 8: // ผลลัพธ์กรณี ข  
+      case 11: // ผลลัพธ์กรณี ค
+        // เตรียมข้อมูล surveyData
+        const surveyData = {
+          familyStatus,
+          livingWith,
+          fatherIncome,
+          motherIncome,
+          legalStatus,
+          guardianIncome,
+          parentLegalStatus,
+        };
         return (
           <View style={styles.resultCard}>
             <Text style={styles.resultTitle}>🎉 รายการเอกสารที่ต้องจัดเตรียม</Text>
             <View style={styles.documentsContainer}>
+              {/* แสดงรายการเอกสารที่ต้องใช้ */}
               {getDocuments().map((doc, index) => (
                 <View key={index} style={styles.documentRow}>
                   <Text style={styles.documentBullet}>•</Text>
@@ -392,6 +460,22 @@ const DocRecScreen = () => {
                 </View>
               ))}
             </View>
+            {/* ปุ่มไปหน้าอัพโหลดเอกสาร */}
+            <TouchableOpacity
+              style={[styles.button, styles.primaryButton, { marginTop: 20 }]}
+              onPress={() => {
+                if (route?.params?.onSurveyComplete) {
+                  // ส่งข้อมูลกลับไปหน้า UploadScreen
+                  route.params.onSurveyComplete(surveyData);
+                  navigation.goBack();
+                } else {
+                  // fallback: ไปหน้าอัพโหลดเอกสารแบบเดิม
+                  navigation.navigate('ส่งเอกสาร', { surveyData });
+                }
+              }}
+            >
+              <Text style={styles.buttonText}>ไปอัพโหลดเอกสาร</Text>
+            </TouchableOpacity>
           </View>
         );
 
@@ -400,24 +484,31 @@ const DocRecScreen = () => {
     }
   };
 
+  // === ส่วน Render หลัก ===
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      {/* ส่วนหัว */}
       <View style={styles.header}>
         <Text style={styles.title}>ระบบแนะนำเอกสาร กยศ.</Text>
         <Text style={styles.subtitle}>ตรวจสอบเอกสารที่จำเป็นสำหรับการสมัครกู้ยืม</Text>
       </View>
       
+      {/* แสดง Progress Bar เมื่อเลือกสถานะครอบครัวแล้ว */}
       {familyStatus && renderProgressBar()}
       
+      {/* แสดงเนื้อหาตามขั้นตอน */}
       {renderContent()}
       
+      {/* ปุ่มนำทาง */}
       <View style={styles.navigationContainer}>
+        {/* ปุ่มย้อนกลับ */}
         {canGoBack() && (
           <TouchableOpacity style={styles.backButton} onPress={handleBack}>
             <Text style={styles.backButtonText}>← ย้อนกลับ</Text>
           </TouchableOpacity>
         )}
         
+        {/* ปุ่มเริ่มต้นใหม่ (แสดงเมื่ออยู่ในขั้นตอนผลลัพธ์) */}
         {((familyStatus === 'ก' && step === 4) || 
           (familyStatus === 'ข' && step === 8) || 
           (familyStatus === 'ค' && step === 11)) && (
