@@ -1,6 +1,7 @@
+import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { createStackNavigator } from '@react-navigation/stack';
+import { createStackNavigator } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
 
 // นำเข้าคอมโพเนนต์หน้าต่างๆ ที่เราสร้างไว้
@@ -8,6 +9,7 @@ import HomeScreen from "./student/HomeScreen";
 import UploadScreen from "./student/UploadScreen";
 import SettingsScreen from "./student/SettingScreen";
 import DocRecScreen from "./student/DocRecScreen";
+import NewsContent from "./student/NewsContent";
 
 // สร้าง Tab Navigator
 const Tab = createBottomTabNavigator();
@@ -19,10 +21,28 @@ const App = () => {
       {/* ใช้ Stack Navigator เป็นคอนเทนเนอร์หลัก */}
       <Stack.Navigator>
         {/* หน้าหลักและหน้าส่งเอกสารใน Tab Navigator */}
-        <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
+        <Stack.Screen
+          name="MainTabs"
+          component={MainTabs}
+          options={{ headerShown: false }}
+        />
         {/* หน้าสำหรับทำแบบสอบถาม */}
-        <Stack.Screen name="Doccument Reccommend" component={DocRecScreen} options={{ headerShown: true}}/>
-        
+        <Stack.Screen
+          name="Document Reccomment"
+          component={DocRecScreen}
+          options={{ headerShown: true }}
+        />
+
+        <Stack.Screen
+          name="HomeScreen"
+          component={HomeScreen}
+          options={{ title: "หน้าหลัก" }}
+        />
+        <Stack.Screen
+          name="NewsContent"
+          component={NewsContent}
+          options={{ title: "รายละเอียดข่าว" }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
