@@ -51,21 +51,46 @@ const UploadScreen = ({ navigation, route }) => {
       }
     );
 
+    // แยกฟอร์มเองอันแรก
     // กรณี ก: ครอบครัวปกติ
     if (data.familyStatus === "ก") {
       documents.push(
         {
-          id: 'consent_form',
-          title: 'หนังสือยินยอมเปิดเผยข้อมูล',
-          description: 'ของ บิดา มารดา และผู้กู้ (คนละ 1 แผ่น)',
+          id: 'consent_fahter_form',
+          title: 'หนังสือยินยอมเปิดเผยข้อมูลของบิดา',
+          //description: ' มารดา และผู้กู้ (คนละ 1 แผ่น)',
           required: true
         },
         {
-          id: 'id_copies',
-          title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้อง',
-          description: 'ของ บิดา มารดา และผู้กู้ (คนละ 1 แผ่น)',
+          id: 'consent_mother_form',
+          title: 'หนังสือยินยอมเปิดเผยข้อมูลของมารดา',
+          //description: 'ของมารดา',
           required: true
-        }
+        },
+        {
+          id: 'consent_student_form',
+          title: 'หนังสือยินยอมเปิดเผยข้อมูลของผู้กู้',
+          //description: 'ของมารดา',
+          required: true
+        },
+        {
+          id: 'id_copies_father',
+          title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของบิดา',
+          //description: 'ของ บิดา มารดา และผู้กู้ (คนละ 1 แผ่น)',
+          required: true
+        },
+        {
+          id: 'id_copies_mother',
+          title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของมารดา',
+          //description: 'ของ บิดา มารดา และผู้กู้ (คนละ 1 แผ่น)',
+          required: true
+        },
+        {
+          id: 'id_copies_student',
+          title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของผู้กู้',
+          //description: 'ของ บิดา มารดา และผู้กู้ (คนละ 1 แผ่น)',
+          required: true
+        },
       );
       
       // เอกสารรายได้บิดา
@@ -372,7 +397,7 @@ const UploadScreen = ({ navigation, route }) => {
     return (
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.welcomeCard}>
-          <Text style={styles.welcomeTitle}>🎓 ระบบอัพโหลดเอกสาร กยศ.</Text>
+          <Text style={styles.welcomeTitle}>ระบบอัพโหลดเอกสาร กยศ.</Text>
           <Text style={styles.welcomeSubtitle}>
             จัดเตรียมและส่งเอกสารสำหรับการสมัครกู้ยืมเงิน กยศ. ได้ง่ายๆ ใน 3 ขั้นตอน
           </Text>
@@ -399,7 +424,7 @@ const UploadScreen = ({ navigation, route }) => {
           </View>
           
           <TouchableOpacity style={styles.primaryButton} onPress={handleStartSurvey}>
-            <Text style={styles.primaryButtonText}>🚀 เริ่มทำแบบสอบถาม</Text>
+            <Text style={styles.primaryButtonText}>เริ่มทำแบบสอบถาม</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -413,7 +438,7 @@ const UploadScreen = ({ navigation, route }) => {
     <ScrollView contentContainerStyle={styles.container}>
       {/* Header Card */}
       <View style={styles.headerCard}>
-        <Text style={styles.headerTitle}>📄 อัพโหลดเอกสาร</Text>
+        <Text style={styles.headerTitle}>อัพโหลดเอกสาร</Text>
         <Text style={styles.headerSubtitle}>
           <Text style={{ fontWeight: 'bold', color: '#3b82f6' }}>สถานภาพครอบครัว:</Text>{" "}
           {surveyData.familyStatus === 'ก' ? 'บิดามารดาอยู่ด้วยกัน' : 
@@ -421,13 +446,13 @@ const UploadScreen = ({ navigation, route }) => {
             'มีผู้ปกครองดูแล'}
         </Text>
         <TouchableOpacity style={styles.retakeButton} onPress={handleRetakeSurvey}>
-          <Text style={styles.retakeButtonText}>🔄 ทำแบบสอบถามใหม่</Text>
+          <Text style={styles.retakeButtonText}>ทำแบบสอบถามใหม่</Text>
         </TouchableOpacity>
       </View>
 
       {/* Progress Card */}
       <View style={styles.progressCard}>
-        <Text style={styles.progressTitle}>📊 สถานะการอัพโหลด</Text>
+        <Text style={styles.progressTitle}>สถานะการอัพโหลด</Text>
         <View style={styles.statsContainer}>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{stats.uploadedRequired}</Text>
@@ -454,7 +479,7 @@ const UploadScreen = ({ navigation, route }) => {
 
       {/* Documents List */}
       <View style={styles.documentsCard}>
-        <Text style={styles.documentsTitle}>📋 รายการเอกสารที่ต้องอัพโหลด</Text>
+        <Text style={styles.documentsTitle}>รายการเอกสารที่ต้องอัพโหลด</Text>
         {documents.map((doc, idx) => (
           <View key={doc.id} style={[
             styles.documentItem, 
@@ -525,7 +550,7 @@ const UploadScreen = ({ navigation, route }) => {
         disabled={stats.uploadedRequired < stats.required}
       >
         <Text style={styles.submitButtonText}>
-          {stats.uploadedRequired >= stats.required ? '✅ ส่งเอกสาร' : `📤 ส่งเอกสาร (${stats.uploadedRequired}/${stats.required})`}
+          {stats.uploadedRequired >= stats.required ? 'ส่งเอกสาร' : `ส่งเอกสาร (${stats.uploadedRequired}/${stats.required})`}
         </Text>
       </TouchableOpacity>
     </ScrollView>
