@@ -4,13 +4,13 @@ import {
   Text, 
   StyleSheet, 
   TouchableOpacity, 
-  TextInput, 
   ScrollView, 
   Alert,
+  Linking,
   Platform
 } from "react-native";
+
 const UploadScreen = ({ navigation, route }) => {
-  // รับค่าจาก navigation parameter
   const initialSurveyData = route?.params?.surveyData || {
     familyStatus: "",
     livingWith: "",
@@ -21,27 +21,22 @@ const UploadScreen = ({ navigation, route }) => {
     parentLegalStatus: "",
   };
 
-  // State สำหรับติดตามสถานะการทำแบบสอบถาม
   const [hasCompletedSurvey, setHasCompletedSurvey] = useState(!!route?.params?.surveyData);
-  
-  // State เก็บข้อมูลจากแบบสอบถาม
   const [surveyData, setSurveyData] = useState(initialSurveyData);
-
-  // State เก็บสถานะการอัพโหลดไฟล์
   const [uploads, setUploads] = useState({});
   const [uploadProgress, setUploadProgress] = useState({});
 
-  // ฟังก์ชันสร้างรายการเอกสารตาม logic จาก DocRecScreen
+  // เพิ่ม downloadUrl สำหรับเอกสารดาวน์โหลดได้
   const generateDocumentsList = (data) => {
     let documents = [];
 
-    // เอกสารพื้นฐานที่ต้องใช้ทุกกรณี
     documents.push(
       {
         id: 'form_101',
         title: 'แบบฟอร์ม กยศ. 101',
         description: '(กรอกข้อมูลตามจริงให้ครบถ้วน)',
-        required: true
+        required: true,
+        downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link'
       },
       {
         id: 'volunteer_doc',
@@ -52,6 +47,7 @@ const UploadScreen = ({ navigation, route }) => {
       {
         id: 'consent_student_form',
         title: 'หนังสือยินยอมเปิดเผยข้อมูลของผู้กู้',
+        downloadUrl:'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing',
         required: true
       },
       {
@@ -61,12 +57,14 @@ const UploadScreen = ({ navigation, route }) => {
       }
     );
 
+
     // กรณี ก: ครอบครัวปกติ
     if (data.familyStatus === "ก") {
       documents.push(
         {
           id: 'consent_fahter_form',
           title: 'หนังสือยินยอมเปิดเผยข้อมูลของบิดา',
+          downloadUrl:'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing',
           required: true
         },
         {
@@ -77,6 +75,7 @@ const UploadScreen = ({ navigation, route }) => {
         {
           id: 'consent_mother_form',
           title: 'หนังสือยินยอมเปิดเผยข้อมูลของมารดา',
+          downloadUrl:'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing',
           required: true
         },
         {
@@ -99,6 +98,7 @@ const UploadScreen = ({ navigation, route }) => {
           id: 'father_income_cert',
           title: 'หนังสือรับรองรายได้ กยศ. 102 ของบิดา',
           description: 'พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)',
+          downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link',
           required: true
         });
       }
@@ -116,6 +116,7 @@ const UploadScreen = ({ navigation, route }) => {
           id: 'mother_income_cert',
           title: 'หนังสือรับรองรายได้ กยศ. 102 ของมารดา',
           description: 'พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)',
+          downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link',
           required: true
         });
       }
@@ -127,6 +128,7 @@ const UploadScreen = ({ navigation, route }) => {
         {
           id: 'consent_form_single_parent',
           title: `หนังสือยินยอมเปิดเผยข้อมูลของ ${parent}`,
+          downloadUrl:'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing',
           required: true
         },
         {
@@ -148,6 +150,7 @@ const UploadScreen = ({ navigation, route }) => {
           id: 'family_status_cert',
           title: 'หนังสือรับรองสถานภาพครอบครัว',
           description: 'พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)',
+          downloadUrl:'https://drive.google.com/file/d/1m98sSlZqAi_YK3PQ2-a9FMIEri1RlENB/view?usp=drive_link',
           required: true
         });
       }
@@ -167,7 +170,9 @@ const UploadScreen = ({ navigation, route }) => {
         documents.push({
           id: 'single_parent_income_cert',
           title: `หนังสือรับรองรายได้ กยศ. 102 ของ${parent}`,
+          
           description: 'พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)',
+          downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link',
           required: true
         });
       }
@@ -178,6 +183,7 @@ const UploadScreen = ({ navigation, route }) => {
         {
           id: 'guardian_consent',
           title: 'หนังสือยินยอมเปิดเผยข้อมูล ของผู้ปกครอง',
+          downloadUrl:'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing',
           required: true
         },
         {
@@ -200,6 +206,7 @@ const UploadScreen = ({ navigation, route }) => {
           id: 'guardian_income_cert',
           title: 'หนังสือรับรองรายได้ กยศ. 102 ของผู้ปกครอง',
           description: 'พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)',
+          downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link',
           required: true
         });
       }
@@ -238,28 +245,21 @@ const UploadScreen = ({ navigation, route }) => {
   };
 
   // ฟังก์ชันจำลองการอัพโหลดไฟล์
-  const handleFileUpload = async (docId) => {
-    // จำลองการเลือกไฟล์
+   const handleFileUpload = async (docId) => {
     Alert.prompt(
       "อัพโหลดไฟล์",
       "พิมพ์ชื่อไฟล์เพื่อจำลองการอัพโหลด:",
       [
-        {
-          text: "ยกเลิก",
-          style: "cancel"
-        },
+        { text: "ยกเลิก", style: "cancel" },
         {
           text: "อัพโหลด",
           onPress: async (filename) => {
             if (filename && filename.trim()) {
-              // จำลอง progress การอัพโหลด
               setUploadProgress(prev => ({ ...prev, [docId]: 0 }));
-              
               for (let i = 0; i <= 100; i += 10) {
                 await new Promise(resolve => setTimeout(resolve, 100));
                 setUploadProgress(prev => ({ ...prev, [docId]: i }));
               }
-              
               setUploads(prev => ({
                 ...prev,
                 [docId]: {
@@ -268,8 +268,6 @@ const UploadScreen = ({ navigation, route }) => {
                   status: 'completed'
                 }
               }));
-              
-              // ลบ progress เมื่ออัพโหลดเสร็จ
               setUploadProgress(prev => {
                 const newProgress = { ...prev };
                 delete newProgress[docId];
@@ -289,21 +287,14 @@ const UploadScreen = ({ navigation, route }) => {
       "ลบไฟล์",
       "คุณต้องการลบไฟล์นี้หรือไม่?",
       [
-        {
-          text: "ยกเลิก",
-          style: "cancel"
-        },
-        {
-          text: "ลบ",
-          style: "destructive",
-          onPress: () => {
-            setUploads(prev => {
-              const newUploads = { ...prev };
-              delete newUploads[docId];
-              return newUploads;
-            });
-          }
-        }
+        { text: "ยกเลิก", style: "cancel" },
+        { text: "ลบ", style: "destructive", onPress: () => {
+          setUploads(prev => {
+            const newUploads = { ...prev };
+            delete newUploads[docId];
+            return newUploads;
+          });
+        }}
       ]
     );
   };
@@ -317,26 +308,22 @@ const UploadScreen = ({ navigation, route }) => {
     if (uploadedRequiredDocs.length < requiredDocs.length) {
       Alert.alert(
         "เอกสารไม่ครบ",
-        `คุณยังอัพโหลดเอกสารไม่ครบ (${uploadedRequiredDocs.length}/${requiredDocs.length})\nกรุณาอัพโหลดเอกสารที่จำเป็นให้ครบถ้วน`,
+        `คุณยังอัพโหลดเอกสารไม่ครบ (${uploadedRequiredDocs.length}/${requiredDocs.length})`,
         [{ text: "ตกลง" }]
       );
       return;
     }
-    
+
     Alert.alert(
       "ส่งเอกสารสำเร็จ",
-      "เอกสารของคุณได้ถูกส่งเรียบร้อยแล้ว\nระบบจะตรวจสอบและแจ้งผลภายใน 3-5 วันทำการ",
+      "เอกสารของคุณได้ถูกส่งเรียบร้อยแล้ว",
       [
-        {
-          text: "ตกลง",
-          onPress: () => {
-            // รีเซ็ตข้อมูล
-            setHasCompletedSurvey(false);
-            setSurveyData({});
-            setUploads({});
-            setUploadProgress({});
-          }
-        }
+        { text: "ตกลง", onPress: () => {
+          setHasCompletedSurvey(false);
+          setSurveyData({});
+          setUploads({});
+          setUploadProgress({});
+        }}
       ]
     );
   };
@@ -347,24 +334,16 @@ const UploadScreen = ({ navigation, route }) => {
       "ทำแบบสอบถามใหม่",
       "การทำแบบสอบถามใหม่จะลบข้อมูลและไฟล์ที่อัพโหลดทั้งหมด\nคุณแน่ใจหรือไม่?",
       [
-        {
-          text: "ยกเลิก",
-          style: "cancel"
-        },
-        {
-          text: "ตกลง",
-          style: "destructive",
-          onPress: () => {
-            setHasCompletedSurvey(false);
-            setSurveyData({});
-            setUploads({});
-            setUploadProgress({});
-          }
-        }
+        { text: "ยกเลิก", style: "cancel" },
+        { text: "ตกลง", style: "destructive", onPress: () => {
+          setHasCompletedSurvey(false);
+          setSurveyData({});
+          setUploads({});
+          setUploadProgress({});
+        }}
       ]
     );
   };
-
   // คำนวณสถิติการอัพโหลด
   const getUploadStats = () => {
     const documents = generateDocumentsList(surveyData);
@@ -464,68 +443,88 @@ const UploadScreen = ({ navigation, route }) => {
         </Text>
       </View>
 
-      {/* Documents List */}
-      <View style={styles.documentsCard}>
-        <Text style={styles.documentsTitle}>รายการเอกสารที่ต้องอัพโหลด</Text>
-        {documents.map((doc, idx) => (
-          <View key={doc.id} style={[
-            styles.documentItem, 
-            idx % 2 === 0 ? styles.documentItemEven : styles.documentItemOdd
-          ]}>
-            <View style={styles.documentHeader}>
-              <View style={styles.documentTitleContainer}>
-                <Text style={styles.documentTitle}>{doc.title}</Text>
-                {doc.required && <Text style={styles.requiredBadge}>*จำเป็น</Text>}
-              </View>
-            </View>
-            {doc.description ? (
-              <Text style={styles.documentDescription}>{doc.description}</Text>
-            ) : null}
-            {/* Upload Area */}
-            <View style={styles.uploadArea}>
-              {uploadProgress[doc.id] !== undefined ? (
-                <View style={styles.uploadProgressContainer}>
-                  <Text style={styles.uploadProgressText}>
-                    กำลังอัพโหลด... {uploadProgress[doc.id]}%
-                  </Text>
-                  <View style={styles.uploadProgressBar}>
-                    <View 
-                      style={[
-                        styles.uploadProgressFill, 
-                        { width: `${uploadProgress[doc.id]}%` }
-                      ]} 
-                    />
-                  </View>
-                </View>
-              ) : uploads[doc.id] ? (
-                <View style={styles.uploadedContainer}>
-                  <View style={styles.uploadedInfo}>
-                    <Text style={styles.uploadedFileName}>
-                      ✅ {uploads[doc.id].filename}
-                    </Text>
-                    <Text style={styles.uploadedDate}>
-                      อัพโหลดเมื่อ: {uploads[doc.id].uploadDate}
-                    </Text>
-                  </View>
-                  <TouchableOpacity 
-                    style={styles.removeButton} 
-                    onPress={() => handleRemoveFile(doc.id)}
-                  >
-                    <Text style={styles.removeButtonText}>🗑️</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <TouchableOpacity 
-                  style={styles.uploadButton} 
-                  onPress={() => handleFileUpload(doc.id)}
-                >
-                  <Text style={styles.uploadButtonText}>📁 เลือกไฟล์</Text>
-                </TouchableOpacity>
-              )}
+   {/* Documents List */}
+<View style={styles.documentsCard}>
+  <Text style={styles.documentsTitle}>รายการเอกสารที่ต้องอัพโหลด</Text>
+  {documents.map((doc, idx) => (
+    <View key={doc.id} style={[
+      styles.documentItem, 
+      idx % 2 === 0 ? styles.documentItemEven : styles.documentItemOdd
+    ]}>
+      <View style={styles.documentHeader}>
+        <View style={styles.documentTitleContainer}>
+          <Text style={styles.documentTitle}>{doc.title}</Text>
+          {doc.required && <Text style={styles.requiredBadge}>*จำเป็น</Text>}
+        </View>
+
+        {/* เพิ่มปุ่มดาวน์โหลดเอกสาร */}
+        {doc.downloadUrl && (
+          <TouchableOpacity
+            onPress={() => {
+              Linking.openURL(doc.downloadUrl).catch(() =>
+                Alert.alert("ไม่สามารถดาวน์โหลดไฟล์ได้")
+              );
+            }}
+            style={styles.downloadButton}
+          >
+            <Text style={styles.downloadButtonText}>⬇️</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {doc.description ? (
+        <Text style={styles.documentDescription}>{doc.description}</Text>
+      ) : null}
+
+      {/* Upload Area เดิม */}
+      <View style={styles.uploadArea}>
+        {uploadProgress[doc.id] !== undefined ? (
+          <View style={styles.uploadProgressContainer}>
+            <Text style={styles.uploadProgressText}>
+              กำลังอัพโหลด... {uploadProgress[doc.id]}%
+            </Text>
+            <View style={styles.uploadProgressBar}>
+              <View 
+                style={[
+                  styles.uploadProgressFill, 
+                  { width: `${uploadProgress[doc.id]}%` }
+                ]} 
+              />
             </View>
           </View>
-        ))}
+        ) : uploads[doc.id] ? (
+          <View style={styles.uploadedContainer}>
+            <View style={styles.uploadedInfo}>
+              <Text style={styles.uploadedFileName}>
+                ✅ {uploads[doc.id].filename}
+              </Text>
+              <Text style={styles.uploadedDate}>
+                อัพโหลดเมื่อ: {uploads[doc.id].uploadDate}
+              </Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.removeButton} 
+              onPress={() => handleRemoveFile(doc.id)}
+            >
+              <Text style={styles.removeButtonText}>🗑️</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity 
+            style={styles.uploadButton} 
+            onPress={() => handleFileUpload(doc.id)}
+          >
+            <Text style={styles.uploadButtonText}>📁 เลือกไฟล์</Text>
+          </TouchableOpacity>
+        )}
       </View>
+    </View>
+    
+    
+  ))}
+</View>
+
+
 
       {/* Submit Button */}
       <TouchableOpacity 
@@ -547,37 +546,37 @@ const UploadScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: '#f0f6ff',
+    backgroundColor: '#eef2ff',
     padding: 16,
     paddingBottom: 40,
   },
   // Welcome Screen Styles
   welcomeCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 28,
-    marginBottom: 16,
+    marginBottom: 20,
     shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.10,
-    shadowRadius: 16,
-    elevation: 7,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 8,
     alignItems: 'center',
   },
   welcomeTitle: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: 'bold',
-    color: '#2563eb',
-    marginBottom: 10,
+    color: '#1e40af',
+    marginBottom: 12,
     textAlign: 'center',
     letterSpacing: 0.5,
   },
   welcomeSubtitle: {
-    fontSize: 17,
-    color: '#64748b',
+    fontSize: 16,
+    color: '#475569',
     textAlign: 'center',
-    marginBottom: 32,
-    lineHeight: 26,
+    marginBottom: 28,
+    lineHeight: 24,
   },
   stepContainer: {
     width: '100%',
@@ -586,22 +585,22 @@ const styles = StyleSheet.create({
   stepItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
     paddingHorizontal: 8,
   },
   stepNumber: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#2563eb',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
+    marginRight: 14,
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
   },
   stepNumberText: {
     color: '#ffffff',
@@ -610,25 +609,25 @@ const styles = StyleSheet.create({
   },
   stepText: {
     flex: 1,
-    fontSize: 17,
-    color: '#374151',
-    lineHeight: 24,
+    fontSize: 16,
+    color: '#334155',
+    lineHeight: 22,
   },
   primaryButton: {
     backgroundColor: '#2563eb',
     paddingVertical: 16,
     paddingHorizontal: 36,
-    borderRadius: 14,
+    borderRadius: 16,
     shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
     elevation: 6,
     marginTop: 10,
   },
   primaryButtonText: {
     color: '#ffffff',
-    fontSize: 19,
+    fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
     letterSpacing: 0.5,
@@ -636,53 +635,58 @@ const styles = StyleSheet.create({
   // Header Card Styles
   headerCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 22,
-    marginBottom: 16,
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 20,
     shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 5,
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 23,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#1e293b',
     marginBottom: 8,
     textAlign: 'center',
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#64748b',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   retakeButton: {
     backgroundColor: '#f59e0b',
     paddingVertical: 8,
-    paddingHorizontal: 18,
-    borderRadius: 8,
+    paddingHorizontal: 20,
+    borderRadius: 10,
     alignSelf: 'center',
     marginTop: 6,
+    shadowColor: '#f59e0b',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   retakeButtonText: {
     color: '#ffffff',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
   },
   // Progress Card Styles
   progressCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 20,
-    marginBottom: 16,
+    marginBottom: 20,
     shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 4,
   },
   progressTitle: {
     fontSize: 18,
@@ -692,7 +696,7 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
   },
@@ -701,7 +705,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   statNumber: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#10b981',
   },
@@ -713,7 +717,7 @@ const styles = StyleSheet.create({
   statDivider: {
     fontSize: 22,
     color: '#64748b',
-    marginHorizontal: 2,
+    marginHorizontal: 4,
     fontWeight: 'bold',
   },
   progressBar: {
@@ -726,11 +730,11 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#2563eb',
     borderRadius: 5,
   },
   progressText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#475569',
     fontWeight: '600',
     textAlign: 'center',
@@ -739,29 +743,28 @@ const styles = StyleSheet.create({
   // Documents List Styles
   documentsCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 18,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
     shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
     shadowRadius: 8,
-    elevation: 2,
+    elevation: 4,
   },
   documentsTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1e293b',
-    marginBottom: 14,
-    textAlign: 'left',
+    marginBottom: 16,
   },
   documentItem: {
-    marginBottom: 18,
+    marginBottom: 16,
     padding: 14,
-    borderRadius: 10,
+    borderRadius: 14,
     backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#e0e7ef',
+    borderColor: '#e2e8f0',
   },
   documentItemEven: {
     backgroundColor: '#f1f5f9',
@@ -772,21 +775,23 @@ const styles = StyleSheet.create({
   documentHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
+    justifyContent: 'space-between',
   },
   documentTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
+    flex: 1,
   },
   documentTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#2563eb',
-    marginRight: 8,
+    marginRight: 6,
   },
   requiredBadge: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#ef4444',
     fontWeight: 'bold',
     marginLeft: 2,
@@ -794,32 +799,30 @@ const styles = StyleSheet.create({
   documentDescription: {
     fontSize: 14,
     color: '#64748b',
-    marginBottom: 6,
-    marginLeft: 2,
+    marginBottom: 8,
   },
   uploadArea: {
-    marginTop: 6,
+    marginTop: 8,
   },
   uploadButton: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#2563eb',
     paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     alignItems: 'center',
     alignSelf: 'flex-start',
-    marginTop: 2,
+    marginTop: 4,
   },
   uploadButtonText: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
   },
   uploadProgressContainer: {
-    marginTop: 2,
-    marginBottom: 2,
+    marginTop: 4,
   },
   uploadProgressText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#64748b',
     marginBottom: 2,
   },
@@ -831,35 +834,35 @@ const styles = StyleSheet.create({
   },
   uploadProgressFill: {
     height: '100%',
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#2563eb',
     borderRadius: 4,
   },
   uploadedContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    marginTop: 4,
     backgroundColor: '#e0f2fe',
-    borderRadius: 6,
+    borderRadius: 8,
     paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
   },
   uploadedInfo: {
     flex: 1,
   },
   uploadedFileName: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#059669',
     fontWeight: 'bold',
   },
   uploadedDate: {
     fontSize: 12,
-    color: '#64748b',
+    color: '#475569',
     marginTop: 2,
   },
   removeButton: {
     marginLeft: 10,
     backgroundColor: '#ef4444',
-    borderRadius: 6,
+    borderRadius: 8,
     padding: 6,
   },
   removeButtonText: {
@@ -871,25 +874,43 @@ const styles = StyleSheet.create({
   submitButton: {
     backgroundColor: '#10b981',
     paddingVertical: 16,
-    borderRadius: 14,
+    borderRadius: 16,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 12,
     marginBottom: 30,
     shadowColor: '#10b981',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 5,
   },
   submitButtonDisabled: {
     backgroundColor: '#a7f3d0',
   },
   submitButtonText: {
-    color: '#fff',
-    fontSize: 18,
+    color: '#ffffff',
+    fontSize: 17,
     fontWeight: 'bold',
     letterSpacing: 0.5,
   },
+  downloadButton: {
+    marginLeft: 10,
+    backgroundColor: '#2563eb',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  downloadButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
 });
+
 
 export default UploadScreen;
