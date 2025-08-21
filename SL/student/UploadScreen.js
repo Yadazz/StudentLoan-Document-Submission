@@ -48,47 +48,40 @@ const UploadScreen = ({ navigation, route }) => {
         title: 'เอกสารจิตอาสา',
         description: '(กิจกรรมในปีการศึกษา 2567 อย่างน้อย 1 รายการ)',
         required: true
+      },
+      {
+        id: 'consent_student_form',
+        title: 'หนังสือยินยอมเปิดเผยข้อมูลของผู้กู้',
+        required: true
+      },
+      {
+        id: 'id_copies_student',
+        title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของผู้กู้',
+        required: true
       }
     );
 
-    // แยกฟอร์มเองอันแรก
     // กรณี ก: ครอบครัวปกติ
     if (data.familyStatus === "ก") {
       documents.push(
         {
           id: 'consent_fahter_form',
           title: 'หนังสือยินยอมเปิดเผยข้อมูลของบิดา',
-          //description: ' มารดา และผู้กู้ (คนละ 1 แผ่น)',
-          required: true
-        },
-        {
-          id: 'consent_mother_form',
-          title: 'หนังสือยินยอมเปิดเผยข้อมูลของมารดา',
-          //description: 'ของมารดา',
-          required: true
-        },
-        {
-          id: 'consent_student_form',
-          title: 'หนังสือยินยอมเปิดเผยข้อมูลของผู้กู้',
-          //description: 'ของมารดา',
           required: true
         },
         {
           id: 'id_copies_father',
           title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของบิดา',
-          //description: 'ของ บิดา มารดา และผู้กู้ (คนละ 1 แผ่น)',
+          required: true
+        },
+        {
+          id: 'consent_mother_form',
+          title: 'หนังสือยินยอมเปิดเผยข้อมูลของมารดา',
           required: true
         },
         {
           id: 'id_copies_mother',
           title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของมารดา',
-          //description: 'ของ บิดา มารดา และผู้กู้ (คนละ 1 แผ่น)',
-          required: true
-        },
-        {
-          id: 'id_copies_student',
-          title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของผู้กู้',
-          //description: 'ของ บิดา มารดา และผู้กู้ (คนละ 1 แผ่น)',
           required: true
         },
       );
@@ -132,15 +125,13 @@ const UploadScreen = ({ navigation, route }) => {
       let parent = data.livingWith === "บิดา" ? "บิดา" : "มารดา";
       documents.push(
         {
-          id: 'consent_form_single',
-          title: `หนังสือยินยอมเปิดเผยข้อมูล ของ ${parent} และผู้กู้`,
-          description: '(คนละ 1 แผ่น)',
+          id: 'consent_form_single_parent',
+          title: `หนังสือยินยอมเปิดเผยข้อมูลของ ${parent}`,
           required: true
         },
         {
-          id: 'id_copies_single',
-          title: `สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้อง ของ ${parent} และผู้กู้`,
-          description: '(คนละ 1 แผ่น)',
+          id: 'id_copies_single_parent',
+          title: `สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของ ${parent}`,
           required: true
         }
       );
@@ -150,7 +141,6 @@ const UploadScreen = ({ navigation, route }) => {
         documents.push({
           id: 'legal_status',
           title: 'สำเนาใบหย่า (กรณีหย่าร้าง) หรือ สำเนาใบมรณบัตร (กรณีเสียชีวิต)',
-          description: '',
           required: true
         });
       } else {
@@ -187,14 +177,12 @@ const UploadScreen = ({ navigation, route }) => {
       documents.push(
         {
           id: 'guardian_consent',
-          title: 'หนังสือยินยอมเปิดเผยข้อมูล ของ ผู้ปกครองและผู้กู้',
-          description: '(คนละ 1 แผ่น)',
+          title: 'หนังสือยินยอมเปิดเผยข้อมูล ของผู้ปกครอง',
           required: true
         },
         {
           id: 'guardian_id_copies',
-          title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้อง ของ ผู้ปกครองและผู้กู้',
-          description: '(คนละ 1 แผ่น)',
+          title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้อง ของผู้ปกครอง',
           required: true
         }
       );
@@ -225,7 +213,6 @@ const UploadScreen = ({ navigation, route }) => {
           required: true
         });
       }
-      
       // เอกสารแสดงสถานภาพครอบครัว (บังคับสำหรับกรณี ค)
       documents.push({
         id: 'family_status_required',
