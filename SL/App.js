@@ -1,4 +1,3 @@
-import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from '@react-navigation/stack';
@@ -22,7 +21,8 @@ const App = () => {
         {/* หน้าหลักและหน้าส่งเอกสารใน Tab Navigator */}
         <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
         {/* หน้าสำหรับทำแบบสอบถาม */}
-        <Stack.Screen name="Document Reccomment" component={DocRecScreen} options={{ headerShown: true}}/>
+        <Stack.Screen name="Doccument Reccommend" component={DocRecScreen} options={{ headerShown: true}}/>
+        
       </Stack.Navigator>
     </NavigationContainer>
   );
