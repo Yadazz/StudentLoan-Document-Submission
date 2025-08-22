@@ -13,6 +13,7 @@ import SettingsScreen from "./student/SettingScreen";
 import DocRecScreen from "./student/DocRecScreen";
 import NewsContent from "./student/NewsContent";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import InsertForm from "./student/InsertForm";
 
 // สร้าง Tab Navigator
 const Tab = createBottomTabNavigator();
@@ -42,6 +43,11 @@ const App = () => {
             name="NewsContent"
             component={NewsContent}
             options={{ title: "รายละเอียดข่าว" }}
+          />
+          <Stack.Screen
+            name="InsertForm"
+            component={InsertForm}
+            options={{ title: "กรอกเอกสาร" }}
           />
         </Stack.Navigator>
       </NavigationContainer>
@@ -88,6 +94,11 @@ const MainTabs = () => (
       name="ตั้งค่า"
       component={SettingsScreen}
       options={{ title: "ตั้งค่า" }}
+    />
+    <Tab.Screen
+      name="กรอกเอกสาร"
+      component={InsertForm}
+      options={{ title: "กรอกเอกสาร" }}
     />
   </Tab.Navigator>
 );
