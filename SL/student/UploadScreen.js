@@ -7,11 +7,36 @@ import {
   ScrollView, 
   Alert,
   Linking,
-  Platform
-  
+  Platform,
+  Modal,
+  Dimensions,
+  Image,
+  ActivityIndicator
 } from "react-native";
- import * as DocumentPicker from "expo-document-picker";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
+const { width, height } = Dimensions.get('window');
+
+const handleOpenUploadedFile = async (file) => {
+  try {
+    if (!file?.uri) return;
+
+    // ตรวจสอบว่าอุปกรณ์รองรับการแชร์ไฟล์
+    const isAvailable = await Sharing.isAvailableAsync();
+    if (!isAvailable) {
+      Alert.alert("ไม่สามารถเปิดไฟล์ได้", "อุปกรณ์ของคุณไม่รองรับการเปิดไฟล์นี้");
+      return;
+    }
+
+    // สำหรับไฟล์ local ที่เราอัปโหลด สามารถเปิดด้วย Sharing.shareAsync
+    await Sharing.shareAsync(file.uri);
+  } catch (error) {
+    console.error(error);
+    Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถเปิดไฟล์นี้ได้");
+  }
+};
 
 const UploadScreen = ({ navigation, route }) => {
   const initialSurveyData = route?.params?.surveyData || {
@@ -28,8 +53,19 @@ const UploadScreen = ({ navigation, route }) => {
   const [surveyData, setSurveyData] = useState(initialSurveyData);
   const [uploads, setUploads] = useState({});
   const [uploadProgress, setUploadProgress] = useState({});
+  
+  // state สำหรับ modal
+  const [showFileModal, setShowFileModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedDocTitle, setSelectedDocTitle] = useState('');
+  const [fileContent, setFileContent] = useState(null);
+  const [isLoadingContent, setIsLoadingContent] = useState(false);
+  const [contentType, setContentType] = useState('');
 
-  // เพิ่ม downloadUrl สำหรับเอกสารดาวน์โหลดได้
+  // state สำหรับการ zoom รูปภาพ
+  const [imageZoom, setImageZoom] = useState(1);
+  const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
+
   const generateDocumentsList = (data) => {
     let documents = [];
 
@@ -59,7 +95,6 @@ const UploadScreen = ({ navigation, route }) => {
         required: true
       }
     );
-
 
     // กรณี ก: ครอบครัวปกติ
     if (data.familyStatus === "ก") {
@@ -173,7 +208,6 @@ const UploadScreen = ({ navigation, route }) => {
         documents.push({
           id: 'single_parent_income_cert',
           title: `หนังสือรับรองรายได้ กยศ. 102 ของ${parent}`,
-          
           description: 'พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)',
           downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link',
           required: true
@@ -235,11 +269,9 @@ const UploadScreen = ({ navigation, route }) => {
     return documents;
   };
 
-  // Mock ฟังก์ชันสำหรับจำลองการทำแบบสอบถาม
+  // ฟังก์ชันสำหรับจำลองการทำแบบสอบถาม
   const handleStartSurvey = () => {
-    // ไปหน้า DocRecScreen เพื่อทำแบบสอบถามจริง
-    navigation.navigate('Doccument Reccommend', {
-      // ส่ง callback กลับมารับข้อมูล surveyData หลังทำแบบสอบถามเสร็จ
+    navigation.navigate('Document Reccommend', {
       onSurveyComplete: (data) => {
         setSurveyData(data);
         setHasCompletedSurvey(true);
@@ -247,38 +279,114 @@ const UploadScreen = ({ navigation, route }) => {
     });
   };
 
+  // ฟังก์ชันแสดง modal ของไฟล์
+  const handleShowFileModal = async (docId, docTitle) => {
+    const file = uploads[docId];
+    if (file) {
+      setSelectedFile(file);
+      setSelectedDocTitle(docTitle);
+      setShowFileModal(true);
+      setIsLoadingContent(true);
+      
+      try {
+        await loadFileContent(file);
+      } catch (error) {
+        console.error('Error loading file content:', error);
+        Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดเนื้อหาไฟล์ได้');
+      } finally {
+        setIsLoadingContent(false);
+      }
+    }
+  };
+
+  // ฟังก์ชันโหลดเนื้อหาไฟล์ที่ปรับปรุงแล้ว
+  const loadFileContent = async (file) => {
+    try {
+      const mimeType = file.mimeType?.toLowerCase() || '';
+      const fileName = file.filename?.toLowerCase() || '';
+      
+      // ตรวจสอบประเภทไฟล์แบบละเอียดขึ้น
+      if (mimeType.startsWith('image/') || 
+          fileName.endsWith('.jpg') || 
+          fileName.endsWith('.jpeg') || 
+          fileName.endsWith('.png') || 
+          fileName.endsWith('.gif') || 
+          fileName.endsWith('.bmp') || 
+          fileName.endsWith('.webp')) {
+        setContentType('image');
+        setFileContent(file.uri);
+      } else if (mimeType.includes('text/') || 
+                 mimeType.includes('json') || 
+                 fileName.endsWith('.txt') ||
+                 fileName.endsWith('.json')) {
+        setContentType('text');
+        const content = await FileSystem.readAsStringAsync(file.uri, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+        setFileContent(content);
+      } else if (mimeType.includes('pdf') || fileName.endsWith('.pdf')) {
+        setContentType('pdf');
+        setFileContent('ไฟล์ PDF ต้องใช้แอปพลิเคชันภายนอกในการดู คลิก "เปิดด้วยแอปภายนอก" เพื่อดูไฟล์');
+      } else {
+        setContentType('other');
+        setFileContent(`ไฟล์ประเภท ${mimeType || 'ไม่ทราบ'} ไม่สามารถแสดงผลในแอปได้`);
+      }
+    } catch (error) {
+      console.error('Error reading file:', error);
+      setContentType('error');
+      setFileContent('ไม่สามารถอ่านไฟล์นี้ได้ กรุณาลองใหม่อีกครั้ง');
+    }
+  };
+
+  // ฟังก์ชันปิด modal พร้อมรีเซ็ต zoom
+  const handleCloseModal = () => {
+    setShowFileModal(false);
+    setSelectedFile(null);
+    setSelectedDocTitle('');
+    setFileContent(null);
+    setContentType('');
+    setIsLoadingContent(false);
+    setImageZoom(1);
+    setImagePosition({ x: 0, y: 0 });
+  };
+
+  // ฟังก์ชันแปลงขนาดไฟล์
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
   // ฟังก์ชันจำลองการอัพโหลดไฟล์
- 
+  const handleFileUpload = async (docId) => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        copyToCacheDirectory: true,
+      });
 
-const handleFileUpload = async (docId) => {
-  try {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: "*/*", // เลือกไฟล์ได้ทุกชนิด
-      copyToCacheDirectory: true,
-    });
+      if (result.canceled) return;
 
-    if (result.canceled) return;
+      const file = result.assets[0];
 
-    const file = result.assets[0];
-
-    // เซฟสถานะไฟล์ที่อัปโหลด
-    setUploads((prev) => ({
-      ...prev,
-      [docId]: {
-        filename: file.name,
-        uri: file.uri,
-        mimeType: file.mimeType,
-        size: file.size,
-        uploadDate: new Date().toLocaleString("th-TH"),
-        status: "completed",
-      },
-    }));
-  } catch (error) {
-    Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถเลือกไฟล์ได้");
-    console.error(error);
-  }
-};
-
+      setUploads((prev) => ({
+        ...prev,
+        [docId]: {
+          filename: file.name,
+          uri: file.uri,
+          mimeType: file.mimeType,
+          size: file.size,
+          uploadDate: new Date().toLocaleString("th-TH"),
+          status: "completed",
+        },
+      }));
+    } catch (error) {
+      Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถเลือกไฟล์ได้");
+      console.error(error);
+    }
+  };
 
   // ฟังก์ชันลบไฟล์ที่อัพโหลดแล้ว
   const handleRemoveFile = (docId) => {
@@ -293,6 +401,7 @@ const handleFileUpload = async (docId) => {
             delete newUploads[docId];
             return newUploads;
           });
+          handleCloseModal();
         }}
       ]
     );
@@ -343,6 +452,7 @@ const handleFileUpload = async (docId) => {
       ]
     );
   };
+  
   // คำนวณสถิติการอัพโหลด
   const getUploadStats = () => {
     const documents = generateDocumentsList(surveyData);
@@ -442,88 +552,86 @@ const handleFileUpload = async (docId) => {
         </Text>
       </View>
 
-   {/* Documents List */}
-<View style={styles.documentsCard}>
-  <Text style={styles.documentsTitle}>รายการเอกสารที่ต้องอัพโหลด</Text>
-  {documents.map((doc, idx) => (
-    <View key={doc.id} style={[
-      styles.documentItem, 
-      idx % 2 === 0 ? styles.documentItemEven : styles.documentItemOdd
-    ]}>
-      <View style={styles.documentHeader}>
-        <View style={styles.documentTitleContainer}>
-          <Text style={styles.documentTitle}>{doc.title}</Text>
-          {doc.required && <Text style={styles.requiredBadge}>*จำเป็น</Text>}
-        </View>
+      {/* Documents List */}
+      <View style={styles.documentsCard}>
+        <Text style={styles.documentsTitle}>รายการเอกสารที่ต้องอัพโหลด</Text>
+        {documents.map((doc, idx) => (
+          <View key={doc.id} style={[
+            styles.documentItem, 
+            idx % 2 === 0 ? styles.documentItemEven : styles.documentItemOdd
+          ]}>
+            <View style={styles.documentHeader}>
+              <View style={styles.documentTitleContainer}>
+                <Text style={styles.documentTitle}>{doc.title}</Text>
+                {doc.required && <Text style={styles.requiredBadge}>*จำเป็น</Text>}
+              </View>
 
-        {/* เพิ่มปุ่มดาวน์โหลดเอกสาร */}
-        {doc.downloadUrl && (
-          <TouchableOpacity
-            onPress={() => {
-              Linking.openURL(doc.downloadUrl).catch(() =>
-                Alert.alert("ไม่สามารถดาวน์โหลดไฟล์ได้")
-              );
-            }}
-            style={styles.downloadButton}
-          >
-            <Text style={styles.downloadButtonText}>⬇️</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+              {doc.downloadUrl && (
+                <TouchableOpacity
+                  onPress={() => {
+                    Linking.openURL(doc.downloadUrl).catch(() =>
+                      Alert.alert("ไม่สามารถดาวน์โหลดไฟล์ได้")
+                    );
+                  }}
+                  style={styles.downloadButton}
+                >
+                  <Text style={styles.downloadButtonText}>⬇️</Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
-      {doc.description ? (
-        <Text style={styles.documentDescription}>{doc.description}</Text>
-      ) : null}
+            {doc.description ? (
+              <Text style={styles.documentDescription}>{doc.description}</Text>
+            ) : null}
 
-      {/* Upload Area เดิม */}
-      <View style={styles.uploadArea}>
-        {uploadProgress[doc.id] !== undefined ? (
-          <View style={styles.uploadProgressContainer}>
-            <Text style={styles.uploadProgressText}>
-              กำลังอัพโหลด... {uploadProgress[doc.id]}%
-            </Text>
-            <View style={styles.uploadProgressBar}>
-              <View 
-                style={[
-                  styles.uploadProgressFill, 
-                  { width: `${uploadProgress[doc.id]}%` }
-                ]} 
-              />
+            {/* Upload Area */}
+            <View style={styles.uploadArea}>
+              {uploadProgress[doc.id] !== undefined ? (
+                <View style={styles.uploadProgressContainer}>
+                  <Text style={styles.uploadProgressText}>
+                    กำลังอัพโหลด... {uploadProgress[doc.id]}%
+                  </Text>
+                  <View style={styles.uploadProgressBar}>
+                    <View 
+                      style={[
+                        styles.uploadProgressFill, 
+                        { width: `${uploadProgress[doc.id]}%` }
+                      ]} 
+                    />
+                  </View>
+                </View>
+              ) : uploads[doc.id] ? (
+                <View style={styles.uploadedContainer}>
+                  <TouchableOpacity 
+                    style={{ flex: 1 }}
+                    onPress={() => handleShowFileModal(doc.id, doc.title)}
+                  >
+                    <Text style={styles.uploadedFileName}>
+                      ✅ {uploads[doc.id].filename}
+                    </Text>
+                    <Text style={styles.uploadedDate}>
+                      อัพโหลดเมื่อ: {uploads[doc.id].uploadDate}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.removeButton} 
+                    onPress={() => handleRemoveFile(doc.id)}
+                  >
+                    <Text style={styles.removeButtonText}>🗑️</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity 
+                  style={styles.uploadButton} 
+                  onPress={() => handleFileUpload(doc.id)}
+                >
+                  <Text style={styles.uploadButtonText}>📁 เลือกไฟล์</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
-        ) : uploads[doc.id] ? (
-          <View style={styles.uploadedContainer}>
-            <View style={styles.uploadedInfo}>
-              <Text style={styles.uploadedFileName}>
-                ✅ {uploads[doc.id].filename}
-              </Text>
-              <Text style={styles.uploadedDate}>
-                อัพโหลดเมื่อ: {uploads[doc.id].uploadDate}
-              </Text>
-            </View>
-            <TouchableOpacity 
-              style={styles.removeButton} 
-              onPress={() => handleRemoveFile(doc.id)}
-            >
-              <Text style={styles.removeButtonText}>🗑️</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity 
-            style={styles.uploadButton} 
-            onPress={() => handleFileUpload(doc.id)}
-          >
-            <Text style={styles.uploadButtonText}>📁 เลือกไฟล์</Text>
-          </TouchableOpacity>
-        )}
+        ))}
       </View>
-    </View>
-    
-    
-  ))}
-</View>
-
-
 
       {/* Submit Button */}
       <TouchableOpacity 
@@ -538,6 +646,234 @@ const handleFileUpload = async (docId) => {
           {stats.uploadedRequired >= stats.required ? 'ส่งเอกสาร' : `ส่งเอกสาร (${stats.uploadedRequired}/${stats.required})`}
         </Text>
       </TouchableOpacity>
+
+      {/* File Preview Modal - Enhanced */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showFileModal}
+        onRequestClose={handleCloseModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>รายละเอียดไฟล์</Text>
+              <TouchableOpacity 
+                style={styles.closeButton} 
+                onPress={handleCloseModal}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedFile && (
+              <View style={styles.modalContent}>
+                <View style={styles.fileInfoCard}>
+                  <View style={styles.fileIcon}>
+                    <Text style={styles.fileIconText}>📄</Text>
+                  </View>
+                  
+                  <View style={styles.fileDetails}>
+                    <Text style={styles.modalDocTitle}>{selectedDocTitle}</Text>
+                    <Text style={styles.fileName}>{selectedFile.filename}</Text>
+                    
+                    <View style={styles.fileMetadata}>
+                      <View style={styles.metadataItem}>
+                        <Text style={styles.metadataLabel}>ขนาดไฟล์:</Text>
+                        <Text style={styles.metadataValue}>
+                          {formatFileSize(selectedFile.size)}
+                        </Text>
+                      </View>
+                      
+                      <View style={styles.metadataItem}>
+                        <Text style={styles.metadataLabel}>ประเภท:</Text>
+                        <Text style={styles.metadataValue}>
+                          {selectedFile.mimeType || 'ไม่ระบุ'}
+                        </Text>
+                      </View>
+                      
+                      <View style={styles.metadataItem}>
+                        <Text style={styles.metadataLabel}>อัพโหลดเมื่อ:</Text>
+                        <Text style={styles.metadataValue}>
+                          {selectedFile.uploadDate}
+                        </Text>
+                      </View>
+                      
+                      <View style={styles.metadataItem}>
+                        <Text style={styles.metadataLabel}>สถานะ:</Text>
+                        <Text style={[styles.metadataValue, styles.statusSuccess]}>
+                          ✅ อัพโหลดสำเร็จ
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={() => handleOpenUploadedFile(selectedFile)}
+                  >
+                    <Text style={styles.actionButtonText}>📤 แชร์ไฟล์</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.actionButton, styles.actionButtonDanger]}
+                    onPress={() => {
+                      const docId = Object.keys(uploads).find(
+                        key => uploads[key] === selectedFile
+                      );
+                      if (docId) {
+                        handleRemoveFile(docId);
+                      }
+                    }}
+                  >
+                    <Text style={styles.actionButtonText}>🗑️ ลบไฟล์</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* File Content Preview - Enhanced */}
+                <View style={styles.filePreviewContainer}>
+                  <Text style={styles.previewTitle}>ตัวอย่างไฟล์:</Text>
+                  
+                  {isLoadingContent ? (
+                    <View style={styles.loadingContainer}>
+                      <ActivityIndicator size="large" color="#2563eb" />
+                      <Text style={styles.loadingText}>กำลังโหลดเนื้อหาไฟล์...</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.previewContent}>
+                      {contentType === 'image' && (
+                        <View style={styles.imagePreviewContainer}>
+                          <ScrollView 
+                            horizontal 
+                            showsHorizontalScrollIndicator={false}
+                            showsVerticalScrollIndicator={false}
+                            maximumZoomScale={3}
+                            minimumZoomScale={0.5}
+                            bouncesZoom={true}
+                            contentContainerStyle={styles.imageScrollContainer}
+                          >
+                            <TouchableOpacity 
+                              activeOpacity={1}
+                              onPress={() => {
+                                setImageZoom(imageZoom === 1 ? 2 : 1);
+                              }}
+                            >
+                              <Image 
+                                source={{ uri: fileContent }} 
+                                style={[
+                                  styles.previewImageEnhanced,
+                                  {
+                                    transform: [
+                                      { scale: imageZoom },
+                                      { translateX: imagePosition.x },
+                                      { translateY: imagePosition.y }
+                                    ]
+                                  }
+                                ]}
+                                resizeMode="contain"
+                                onError={(error) => {
+                                  console.log('Image load error:', error);
+                                  setContentType('error');
+                                  setFileContent('ไม่สามารถโหลดรูปภาพได้ อาจเป็นเพราะไฟล์เสียหายหรือไม่รองรับ');
+                                }}
+                                onLoad={() => {
+                                  console.log('Image loaded successfully');
+                                }}
+                              />
+                            </TouchableOpacity>
+                          </ScrollView>
+                          
+                          {/* Image Controls */}
+                          <View style={styles.imageControls}>
+                            <TouchableOpacity 
+                              style={styles.zoomButton}
+                              onPress={() => setImageZoom(Math.max(0.5, imageZoom - 0.5))}
+                            >
+                              <Text style={styles.zoomButtonText}>🔍−</Text>
+                            </TouchableOpacity>
+                            
+                            <Text style={styles.zoomText}>{Math.round(imageZoom * 100)}%</Text>
+                            
+                            <TouchableOpacity 
+                              style={styles.zoomButton}
+                              onPress={() => setImageZoom(Math.min(3, imageZoom + 0.5))}
+                            >
+                              <Text style={styles.zoomButtonText}>🔍+</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity 
+                              style={styles.resetButton}
+                              onPress={() => {
+                                setImageZoom(1);
+                                setImagePosition({ x: 0, y: 0 });
+                              }}
+                            >
+                              <Text style={styles.resetButtonText}>รีเซ็ต</Text>
+                            </TouchableOpacity>
+                          </View>
+                          
+                          {/* Image Info */}
+                          <View style={styles.imageInfo}>
+                            <Text style={styles.imageInfoText}>
+                              💡 แตะรูปภาพเพื่อซูม หรือใช้ปุ่มด้านล่าง
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                      
+                      {contentType === 'text' && (
+                        <View style={styles.textPreviewEnhanced}>
+                          <ScrollView 
+                            style={styles.textPreviewContainer}
+                            showsVerticalScrollIndicator={true}
+                          >
+                            <Text style={styles.textPreview}>{fileContent}</Text>
+                          </ScrollView>
+                          <Text style={styles.textInfo}>
+                            📄 เอกสารข้อความ - เลื่อนเพื่อดูเนื้อหาทั้งหมด
+                          </Text>
+                        </View>
+                      )}
+                      
+                      {(contentType === 'pdf' || contentType === 'other' || contentType === 'error') && (
+                        <View style={styles.unsupportedContainer}>
+                          <Text style={styles.unsupportedIcon}>
+                            {contentType === 'pdf' ? '📄' : contentType === 'error' ? '❌' : '📁'}
+                          </Text>
+                          <Text style={styles.unsupportedText}>{fileContent}</Text>
+                          {contentType === 'pdf' && (
+                            <TouchableOpacity 
+                              style={styles.openExternalButton}
+                              onPress={() => handleOpenUploadedFile(selectedFile)}
+                            >
+                              <Text style={styles.openExternalButtonText}>🚀 เปิดด้วยแอปภายนอก</Text>
+                            </TouchableOpacity>
+                          )}
+                          {contentType === 'error' && (
+                            <TouchableOpacity 
+                              style={[styles.openExternalButton, { backgroundColor: '#ef4444' }]}
+                              onPress={() => {
+                                setIsLoadingContent(true);
+                                loadFileContent(selectedFile).finally(() => {
+                                  setIsLoadingContent(false);
+                                });
+                              }}
+                            >
+                              <Text style={styles.openExternalButtonText}>🔄 ลองใหม่</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -845,9 +1181,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
   },
-  uploadedInfo: {
-    flex: 1,
-  },
   uploadedFileName: {
     fontSize: 14,
     color: '#059669',
@@ -909,7 +1242,306 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
+  
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    width: width * 0.95,
+    maxHeight: height * 0.9,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1e293b',
+  },
+  closeButton: {
+    backgroundColor: '#ef4444',
+    borderRadius: 20,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  modalContent: {
+    padding: 20,
+  },
+  fileInfoCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  fileIcon: {
+    backgroundColor: '#2563eb',
+    borderRadius: 12,
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  fileIconText: {
+    fontSize: 24,
+  },
+  fileDetails: {
+    flex: 1,
+  },
+  modalDocTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2563eb',
+    marginBottom: 4,
+  },
+  fileName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 12,
+  },
+  fileMetadata: {
+    gap: 8,
+  },
+  metadataItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  metadataLabel: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  metadataValue: {
+    fontSize: 14,
+    color: '#1e293b',
+    fontWeight: '500',
+    textAlign: 'right',
+    flex: 1,
+    marginLeft: 10,
+  },
+  statusSuccess: {
+    color: '#059669',
+    fontWeight: 'bold',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    backgroundColor: '#2563eb',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  actionButtonDanger: {
+    backgroundColor: '#ef4444',
+    shadowColor: '#ef4444',
+  },
+  actionButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  
+  // File Preview Styles
+  filePreviewContainer: {
+    marginTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingTop: 20,
+  },
+  previewTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 12,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#64748b',
+  },
+  previewContent: {
+    minHeight: 200,
+    maxHeight: 500,
+  },
+  
+  // Enhanced Image Preview Styles
+  imagePreviewContainer: {
+    backgroundColor: '#000000',
+    borderRadius: 12,
+    overflow: 'hidden',
+    minHeight: 300,
+    maxHeight: 500,
+  },
+  imageScrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 300,
+  },
+  previewImageEnhanced: {
+    width: width * 0.8,
+    height: 400,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+  },
+  imageControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    gap: 15,
+  },
+  zoomButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  zoomButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  zoomText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    minWidth: 50,
+    textAlign: 'center',
+  },
+  resetButton: {
+    backgroundColor: '#10b981',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  resetButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  imageInfo: {
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  imageInfoText: {
+    color: '#ffffff',
+    fontSize: 13,
+    textAlign: 'center',
+    opacity: 0.9,
+  },
+  
+  // Enhanced Text Preview Styles
+  textPreviewEnhanced: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  textPreviewContainer: {
+    padding: 16,
+    maxHeight: 350,
+    backgroundColor: '#ffffff',
+  },
+  textPreview: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  textInfo: {
+    backgroundColor: '#e0e7ff',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    fontSize: 13,
+    color: '#3730a3',
+    textAlign: 'center',
+  },
+  
+  // Enhanced Unsupported Container
+  unsupportedContainer: {
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderStyle: 'dashed',
+  },
+  unsupportedIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  unsupportedText: {
+    fontSize: 16,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 20,
+    maxWidth: 280,
+  },
+  openExternalButton: {
+    backgroundColor: '#f59e0b',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    shadowColor: '#f59e0b',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  openExternalButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
-
 
 export default UploadScreen;
