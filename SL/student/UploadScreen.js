@@ -8,7 +8,10 @@ import {
   Alert,
   Linking,
   Platform
+  
 } from "react-native";
+ import * as DocumentPicker from "expo-document-picker";
+
 
 const UploadScreen = ({ navigation, route }) => {
   const initialSurveyData = route?.params?.surveyData || {
@@ -245,41 +248,37 @@ const UploadScreen = ({ navigation, route }) => {
   };
 
   // ฟังก์ชันจำลองการอัพโหลดไฟล์
-   const handleFileUpload = async (docId) => {
-    Alert.prompt(
-      "อัพโหลดไฟล์",
-      "พิมพ์ชื่อไฟล์เพื่อจำลองการอัพโหลด:",
-      [
-        { text: "ยกเลิก", style: "cancel" },
-        {
-          text: "อัพโหลด",
-          onPress: async (filename) => {
-            if (filename && filename.trim()) {
-              setUploadProgress(prev => ({ ...prev, [docId]: 0 }));
-              for (let i = 0; i <= 100; i += 10) {
-                await new Promise(resolve => setTimeout(resolve, 100));
-                setUploadProgress(prev => ({ ...prev, [docId]: i }));
-              }
-              setUploads(prev => ({
-                ...prev,
-                [docId]: {
-                  filename: filename.trim(),
-                  uploadDate: new Date().toLocaleString('th-TH'),
-                  status: 'completed'
-                }
-              }));
-              setUploadProgress(prev => {
-                const newProgress = { ...prev };
-                delete newProgress[docId];
-                return newProgress;
-              });
-            }
-          }
-        }
-      ],
-      "plain-text"
-    );
-  };
+ 
+
+const handleFileUpload = async (docId) => {
+  try {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: "*/*", // เลือกไฟล์ได้ทุกชนิด
+      copyToCacheDirectory: true,
+    });
+
+    if (result.canceled) return;
+
+    const file = result.assets[0];
+
+    // เซฟสถานะไฟล์ที่อัปโหลด
+    setUploads((prev) => ({
+      ...prev,
+      [docId]: {
+        filename: file.name,
+        uri: file.uri,
+        mimeType: file.mimeType,
+        size: file.size,
+        uploadDate: new Date().toLocaleString("th-TH"),
+        status: "completed",
+      },
+    }));
+  } catch (error) {
+    Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถเลือกไฟล์ได้");
+    console.error(error);
+  }
+};
+
 
   // ฟังก์ชันลบไฟล์ที่อัพโหลดแล้ว
   const handleRemoveFile = (docId) => {
