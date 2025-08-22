@@ -29,7 +29,7 @@ const App = () => {
             options={{ headerShown: false }}
           />
           <Stack.Screen
-            name="Document Reccomment"
+            name="Document Reccommend"
             component={DocRecScreen}
             options={{ headerShown: true }}
           />
