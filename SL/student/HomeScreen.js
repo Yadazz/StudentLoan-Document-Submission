@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../database/firebase";
@@ -31,9 +32,9 @@ const NewsItem = ({ item, navigation }) => {
           style={styles.banner}
         />
       ) : null}
-      <Text style={styles.title}>{item.Title}</Text>
+      <Text style={styles.title}>{item.Title || "ไม่มีหัวข้อ"}</Text>
       <Text style={styles.description} numberOfLines={3}>
-        {item.Description}
+        {item.Description || "ไม่มีรายละเอียด"}
       </Text>
       <TouchableOpacity
         style={styles.readMoreContainer}
@@ -54,19 +55,31 @@ const HomeScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
 
-  // ค้นหา Lowercase
-  const filteredData = newsData.filter((item) =>
-    item.Title.toLowerCase().includes(searchText.toLowerCase())
-  );
+  // ค้นหา Lowercase - แก้ไขให้ปลอดภัย
+  const filteredData = newsData.filter((item) => {
+    // ตรวจสอบว่า item.Title มีค่าและเป็น string
+    const title = item.Title || "";
+    const search = searchText || "";
+    
+    return String(title).toLowerCase().includes(String(search).toLowerCase());
+  });
 
   // โหลดข้อมูลจาก Firestore
   const fetchNews = async () => {
     try {
       const querySnapshot = await getDocs(collection(db, "news"));
-      const newsList = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const newsList = querySnapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          Title: data.Title || "", // ให้ค่าเริ่มต้นถ้าไม่มี
+          Description: data.Description || "",
+          Banner: data.Banner || "",
+          ...data,
+        };
+      });
+      
+      console.log("ข้อมูลข่าวที่ได้:", newsList); // เพื่อ debug
       setNewsData(newsList);
     } catch (error) {
       console.error("❌ Error fetching news:", error);
@@ -95,14 +108,10 @@ const HomeScreen = ({ navigation }) => {
             placeholder="ค้นหา..."
             placeholderTextColor="#888"
             value={searchText}
-            onChangeText={(text) => setSearchText(text)}
+            onChangeText={(text) => setSearchText(text || "")}
           />
         </View>
-        
-        {/* กดไอคอนเพื่อไปที่ ProfileScreen */}
-        <TouchableOpacity onPress={() => navigation.navigate("ProfileScreen")}>
-          <Ionicons name="person-circle-outline" size={30} color="#333" />
-        </TouchableOpacity>
+        <Ionicons name="person-circle-outline" size={30} color="#333" />
       </View>
 
       {/* ถ้าโหลดอยู่ให้แสดง spinner */}
@@ -119,7 +128,7 @@ const HomeScreen = ({ navigation }) => {
             <NewsItem item={item} navigation={navigation} />
           )}
           keyExtractor={(item) => item.id}
-        />
+        />  
       )}
 
       <StatusBar style="auto" />
