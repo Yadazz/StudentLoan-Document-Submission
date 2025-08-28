@@ -22,29 +22,27 @@ const Stack = createNativeStackNavigator();
 const NewsItem = ({ item, navigation }) => {
   return (
     <View style={styles.card}>
-      {item.Banner ? (
+      {item.bannerURL ? (
         <Image
           source={{
             uri:
-              item.Banner ||
+              item.bannerURL ||
               "https://via.placeholder.com/300x200.png?text=No+Image",
           }}
           style={styles.banner}
         />
       ) : null}
-      <Text style={styles.title}>{item.Title || "ไม่มีหัวข้อ"}</Text>
+      <Text style={styles.title}>{item.title || "ไม่มีหัวข้อ"}</Text>
       <Text style={styles.description} numberOfLines={3}>
-        {item.Description || "ไม่มีรายละเอียด"}
+        {item.description
+          ? item.description.replace(/<[^>]+>/g, "")
+          : "ไม่มีรายละเอียด"}
       </Text>
       <TouchableOpacity
         style={styles.readMoreContainer}
         onPress={() => navigation.navigate("NewsContent", { item })}
       >
-        <TouchableOpacity
-          onPress={() => navigation.navigate("NewsContent", { item })}
-        >
-          <Text>อ่านเพิ่มเติม</Text>
-        </TouchableOpacity>
+        <Text style={styles.readMore}>อ่านเพิ่มเติม</Text>
       </TouchableOpacity>
     </View>
   );
@@ -54,13 +52,12 @@ const HomeScreen = ({ navigation }) => {
   const [newsData, setNewsData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   // ค้นหา Lowercase - แก้ไขให้ปลอดภัย
   const filteredData = newsData.filter((item) => {
-    // ตรวจสอบว่า item.Title มีค่าและเป็น string
-    const title = item.Title || "";
+    const title = item.title || "";
     const search = searchText || "";
-    
     return String(title).toLowerCase().includes(String(search).toLowerCase());
   });
 
@@ -72,25 +69,34 @@ const HomeScreen = ({ navigation }) => {
         const data = doc.data();
         return {
           id: doc.id,
-          Title: data.Title || "", // ให้ค่าเริ่มต้นถ้าไม่มี
-          Description: data.Description || "",
-          Banner: data.Banner || "",
+          title: data.title || "",
+          description: data.description || "",
+          bannerURL: data.bannerURL || "",
+          createdAt: data.createdAt || null,
+          documentName: data.documentName || "",
+          documentURL: data.documentURL || "",
+          mediaURLs: data.mediaURLs || [],
           ...data,
         };
       });
-      
-      console.log("ข้อมูลข่าวที่ได้:", newsList); // เพื่อ debug
       setNewsData(newsList);
     } catch (error) {
       console.error("❌ Error fetching news:", error);
     } finally {
       setLoading(false);
+      setRefreshing(false); // ปิด refresh หลังโหลดเสร็จ
     }
   };
 
   useEffect(() => {
     fetchNews();
   }, []);
+
+  // ฟังก์ชันสำหรับ Pull-to-Refresh
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchNews();
+  };
 
   return (
     <View style={styles.container}>
@@ -114,8 +120,7 @@ const HomeScreen = ({ navigation }) => {
         <Ionicons name="person-circle-outline" size={30} color="#333" />
       </View>
 
-      {/* ถ้าโหลดอยู่ให้แสดง spinner */}
-      {loading ? (
+      {loading && !refreshing ? (
         <ActivityIndicator
           size="large"
           color="#1e90ff"
@@ -128,7 +133,9 @@ const HomeScreen = ({ navigation }) => {
             <NewsItem item={item} navigation={navigation} />
           )}
           keyExtractor={(item) => item.id}
-        />  
+          refreshing={refreshing} // เพิ่ม prop refreshing
+          onRefresh={handleRefresh} // เพิ่ม prop onRefresh
+        />
       )}
 
       <StatusBar style="auto" />

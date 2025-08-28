@@ -14,9 +14,9 @@ const NewsContent = ({ route }) => {
   const { item } = route.params; // รับ item จาก navigation
 
   // ฟังก์ชันเปิดไฟล์ Document (PDF) ถ้ามี
-  const openDocument = () => {
-    if (item.Document) {
-      Linking.openURL(item.Document).catch((err) =>
+  const openDocument = (url) => {
+    if (url) {
+      Linking.openURL(url).catch((err) =>
         console.error("Cannot open document:", err)
       );
     }
@@ -24,22 +24,27 @@ const NewsContent = ({ route }) => {
 
   // ฟังก์ชันแสดง Media
   const renderMedia = () => {
-    if (!item.Media) return null;
+    if (!item.mediaURLs || item.mediaURLs.length === 0) return null;
 
-    // ถ้าเป็น YouTube link ให้เปิดผ่าน Linking
-    if (item.Media.includes("youtube.com") || item.Media.includes("youtu.be")) {
+    return item.mediaURLs.map((media, index) => {
+      // ถ้าเป็น YouTube link ให้เปิดผ่าน Linking
+      if (media.includes("youtube.com") || media.includes("youtu.be")) {
+        return (
+          <TouchableOpacity
+            key={index}
+            onPress={() => Linking.openURL(media)}
+            style={styles.mediaButton}
+          >
+            <Text style={styles.mediaText}>เปิดวิดีโอ</Text>
+          </TouchableOpacity>
+        );
+      }
+
+      // ถ้าเป็นรูปภาพ
       return (
-        <TouchableOpacity
-          onPress={() => Linking.openURL(item.Media)}
-          style={styles.mediaButton}
-        >
-          <Text style={styles.mediaText}>เปิดวิดีโอ</Text>
-        </TouchableOpacity>
+        <Image key={index} source={{ uri: media }} style={styles.mediaImage} />
       );
-    }
-
-    // ถ้าเป็นรูปภาพ
-    return <Image source={{ uri: item.Media }} style={styles.mediaImage} />;
+    });
   };
 
   return (
@@ -48,12 +53,14 @@ const NewsContent = ({ route }) => {
       contentContainerStyle={{ padding: 15 }}
     >
       <View style={styles.titleContainer}>
-        <Text style={styles.title}>{item.Title}</Text>
+        <Text style={styles.title}>{item.title || "ไม่มีหัวข้อ"}</Text>
         <Text style={styles.createdAt}>
-          {item["CreateAt"].toDate().toLocaleString("th-TH", {
-            dateStyle: "medium",
-            timeStyle: "short",
-          })}
+          {item.createdAt && item.createdAt.toDate
+            ? item.createdAt.toDate().toLocaleString("th-TH", {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })
+            : "ไม่มีวันที่"}
         </Text>
       </View>
 
@@ -61,15 +68,18 @@ const NewsContent = ({ route }) => {
       {renderMedia()}
 
       {/* Document / File */}
-      {item.Document ? (
-        <TouchableOpacity onPress={openDocument} style={styles.documentButton}>
+      {item.documentURL ? (
+        <TouchableOpacity
+          onPress={() => openDocument(item.documentURL)}
+          style={styles.documentButton}
+        >
           <Text style={styles.documentText}>เปิดเอกสาร</Text>
         </TouchableOpacity>
       ) : null}
 
       {/* Description */}
-      {item.Description ? (
-        <Text style={styles.description}>{item.Description}</Text>
+      {item.description ? (
+        <Text style={styles.description}>{item.description}</Text>
       ) : null}
     </ScrollView>
   );
