@@ -17,12 +17,22 @@ import { Buffer } from "buffer";
 
 const InsertForm = () => {
   const formData = {
-    fullName: "สมชาย ใจดี ญ ฏ ฐ ชู ชุ ญู ญุ",
-    idCard: "1234567890123",
-    address: "123/45 หมู่ 6 ต.ทดสอบ อ.เมือง จ.กรุงเทพฯ",
-    phone: "0812345678",
-    email: "somchai@example.com",
-  };
+  fullName: "สมชาย ใจดี ญ ฏ ฐ ชู ชุ ญู ญุ",
+  position: "นายอำเภอ",
+  Affiliation: "อำเภอเมือง",
+  office: "จังหวัดสมุทรปราการ",
+  idCard: "1234567890123",
+  houseNo: "123/45",
+  villageNo: "6",
+  alley: "ทดสอบ",
+  road: "สุขุมวิท",
+  subDistrict: "คลองตัน",
+  district: "คลองเตย",
+  province: "กรุงเทพฯ",
+  postalCode: "10110",
+  phone: "0812345678",
+  email: "somchai@example.com",
+};
 
   const handleSubmit = async () => {
     try {
@@ -58,30 +68,30 @@ const InsertForm = () => {
         font: customFont,
         color: rgb(0, 0, 0),
       });
-      //   firstPage.drawText(formData.idCard, {
-      //     x: 100,
-      //     y: 680,
-      //     size: 12,
-      //     font: customFont,
-      //   });
-      //   firstPage.drawText(formData.address, {
-      //     x: 100,
-      //     y: 660,
-      //     size: 12,
-      //     font: customFont,
-      //   });
-      //   firstPage.drawText(formData.phone, {
-      //     x: 100,
-      //     y: 640,
-      //     size: 12,
-      //     font: customFont,
-      //   });
-      //   firstPage.drawText(formData.email, {
-      //     x: 100,
-      //     y: 620,
-      //     size: 12,
-      //     font: customFont,
-      //   });
+        firstPage.drawText(formData.position, {
+          x: 345.6,
+          y: 679,
+          size: 12,
+          font: customFont,
+        });
+        firstPage.drawText(formData.Affiliation, {
+          x: 86.4,
+          y: 662.4,
+          size: 12,
+          font: customFont,
+        });
+        firstPage.drawText(formData.office, {
+          x: 349.2,
+          y: 662.4,
+          size: 12,
+          font: customFont,
+        });
+        firstPage.drawText(formData.email, {
+          x: 100,
+          y: 620,
+          size: 12,
+          font: customFont,
+        });
 
       // 5. บันทึก PDF → แปลงเป็น Base64 ก่อนเขียน
       const pdfBytes = await pdfDoc.save();
