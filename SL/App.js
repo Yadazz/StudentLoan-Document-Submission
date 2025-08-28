@@ -1,10 +1,8 @@
-import React from "react";
-import { SafeAreaView } from "react-native-safe-area-context";
-
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 // นำเข้าคอมโพเนนต์หน้าต่างๆ ที่เราสร้างไว้
 import HomeScreen from "./student/HomeScreen";
@@ -12,8 +10,11 @@ import UploadScreen from "./student/UploadScreen";
 import SettingsScreen from "./student/SettingScreen";
 import DocRecScreen from "./student/DocRecScreen";
 import NewsContent from "./student/NewsContent";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import ProfileScreen from "./student/ProfileScreen";
+import LoginScreen from "./LoginScreen";
+import SignUpScreen from "./SignUpScreen";
 import InsertForm from "./student/InsertForm";
+
 
 // สร้าง Tab Navigator
 const Tab = createBottomTabNavigator();
@@ -23,7 +24,15 @@ const App = () => {
   return (
     <SafeAreaProvider>
       <NavigationContainer>
-        <Stack.Navigator>
+        <Stack.Navigator initialRouteName="LoginScreen">
+          <Stack.Screen
+            name="LoginScreen"
+            component={LoginScreen}
+          />
+          <Stack.Screen
+            name="SignUpScreen"
+            component={SignUpScreen}
+          />
           <Stack.Screen
             name="MainTabs"
             component={MainTabs}
@@ -43,6 +52,11 @@ const App = () => {
             name="NewsContent"
             component={NewsContent}
             options={{ title: "รายละเอียดข่าว" }}
+          />
+          <Stack.Screen
+            name="ProfileScreen"
+            component={ProfileScreen}
+            options={{ title: "โปรไฟล์" }}
           />
           <Stack.Screen
             name="InsertForm"
