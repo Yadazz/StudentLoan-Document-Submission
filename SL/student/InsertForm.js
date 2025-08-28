@@ -6,104 +6,121 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
+  Platform,
 } from "react-native";
-import { PDFDocument, rgb } from "pdf-lib";
-import fontkit from "@pdf-lib/fontkit";
-import { storage } from "../database/firebase";
-import { ref, getDownloadURL } from "firebase/storage";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import { storage } from "../database/firebase";
+import { ref, getDownloadURL } from "firebase/storage";
 import { Buffer } from "buffer";
 
+// ===== PDF Helper (wrap pdf-lib สำหรับ Mobile เท่านั้น) =====
+let PDFDocument, rgb, fontkit;
+if (Platform.OS !== "web") {
+  const pdfLib = require("pdf-lib");
+  PDFDocument = pdfLib.PDFDocument;
+  rgb = pdfLib.rgb;
+  fontkit = require("@pdf-lib/fontkit");
+}
+
+async function fillPdf(formData, existingPdfBytes, fontBytes) {
+  if (Platform.OS === "web") {
+    Alert.alert("ไม่รองรับ Web", "การสร้าง PDF บน Web ยังไม่รองรับ");
+    return null;
+  }
+
+  const pdfDoc = await PDFDocument.load(existingPdfBytes);
+  pdfDoc.registerFontkit(fontkit);
+  const customFont = await pdfDoc.embedFont(fontBytes);
+
+  const pages = pdfDoc.getPages();
+  const firstPage = pages[0];
+
+  firstPage.drawText(formData.fullName, {
+    x: 131.76,
+    y: 679,
+    size: 10,
+    font: customFont,
+    color: rgb(0, 0, 0),
+  });
+  firstPage.drawText(formData.position, {
+    x: 345.6,
+    y: 679,
+    size: 12,
+    font: customFont,
+  });
+  firstPage.drawText(formData.Affiliation, {
+    x: 86.4,
+    y: 662.4,
+    size: 12,
+    font: customFont,
+  });
+  firstPage.drawText(formData.office, {
+    x: 349.2,
+    y: 662.4,
+    size: 12,
+    font: customFont,
+  });
+  firstPage.drawText(formData.email, {
+    x: 100,
+    y: 620,
+    size: 12,
+    font: customFont,
+  });
+
+  return pdfDoc.save();
+}
+
+// ===== InsertForm Component =====
 const InsertForm = () => {
   const formData = {
-  fullName: "สมชาย ใจดี ญ ฏ ฐ ชู ชุ ญู ญุ",
-  position: "นายอำเภอ",
-  Affiliation: "อำเภอเมือง",
-  office: "จังหวัดสมุทรปราการ",
-  idCard: "1234567890123",
-  houseNo: "123/45",
-  villageNo: "6",
-  alley: "ทดสอบ",
-  road: "สุขุมวิท",
-  subDistrict: "คลองตัน",
-  district: "คลองเตย",
-  province: "กรุงเทพฯ",
-  postalCode: "10110",
-  phone: "0812345678",
-  email: "somchai@example.com",
-};
+    fullName: "สมชาย ใจดี ญ ฏ ฐ ชู ชุ ญู ญุ",
+    position: "นายอำเภอ",
+    Affiliation: "อำเภอเมือง",
+    office: "จังหวัดสมุทรปราการ",
+    idCard: "1234567890123",
+    houseNo: "123/45",
+    villageNo: "6",
+    alley: "ทดสอบ",
+    road: "สุขุมวิท",
+    subDistrict: "คลองตัน",
+    district: "คลองเตย",
+    province: "กรุงเทพฯ",
+    postalCode: "10110",
+    phone: "0812345678",
+    email: "somchai@example.com",
+  };
 
   const handleSubmit = async () => {
+    if (Platform.OS === "web") {
+      Alert.alert("ไม่รองรับ Web", "ฟีเจอร์สร้าง PDF ยังไม่รองรับบน Web");
+      return;
+    }
+
     try {
-      // 1. โหลด PDF template จาก Firebase Storage
-      const pdfRef = ref(storage, "กยศ.102.pdf"); // ปรับ path ให้ตรงกับ Storage
+      // โหลด PDF template
+      const pdfRef = ref(storage, "กยศ.102.pdf");
       const pdfUrl = await getDownloadURL(pdfRef);
       const existingPdfBytes = await fetch(pdfUrl).then((res) =>
         res.arrayBuffer()
       );
 
-      // 2. โหลดฟอนต์ไทยจาก Firebase Storage
-      const fontRef = ref(storage, "assets/fonts/Sarabun-Thin.ttf"); // path ที่อัปโหลดฟอนต์
+      // โหลดฟอนต์ไทย
+      const fontRef = ref(storage, "assets/fonts/Sarabun-Thin.ttf");
       const fontUrl = await getDownloadURL(fontRef);
       const fontBytes = await fetch(fontUrl).then((res) => res.arrayBuffer());
 
-      // 3. โหลด PDF
-      const pdfDoc = await PDFDocument.load(existingPdfBytes);
+      // สร้าง PDF
+      const pdfBytes = await fillPdf(formData, existingPdfBytes, fontBytes);
+      if (!pdfBytes) return;
 
-      // register fontkit สำหรับฟอนต์ custom
-      pdfDoc.registerFontkit(fontkit);
-
-      // embed ฟอนต์ไทย
-      const customFont = await pdfDoc.embedFont(fontBytes);
-
-      const pages = pdfDoc.getPages();
-      const firstPage = pages[0];
-
-      // 4. วางข้อมูลลง PDF (ปรับ x, y ตามช่องฟอร์ม)
-      firstPage.drawText(formData.fullName, {
-        x: 131.76,
-        y: 679,
-        size: 10,
-        font: customFont,
-        color: rgb(0, 0, 0),
-      });
-        firstPage.drawText(formData.position, {
-          x: 345.6,
-          y: 679,
-          size: 12,
-          font: customFont,
-        });
-        firstPage.drawText(formData.Affiliation, {
-          x: 86.4,
-          y: 662.4,
-          size: 12,
-          font: customFont,
-        });
-        firstPage.drawText(formData.office, {
-          x: 349.2,
-          y: 662.4,
-          size: 12,
-          font: customFont,
-        });
-        firstPage.drawText(formData.email, {
-          x: 100,
-          y: 620,
-          size: 12,
-          font: customFont,
-        });
-
-      // 5. บันทึก PDF → แปลงเป็น Base64 ก่อนเขียน
-      const pdfBytes = await pdfDoc.save();
       const base64Pdf = Buffer.from(pdfBytes).toString("base64");
-
       const filePath = FileSystem.documentDirectory + "filled-kyc102.pdf";
       await FileSystem.writeAsStringAsync(filePath, base64Pdf, {
         encoding: FileSystem.EncodingType.Base64,
       });
-
-      // 6. แชร์/ดาวน์โหลด
       await Sharing.shareAsync(filePath);
+
       Alert.alert("สำเร็จ", "สร้าง PDF เรียบร้อยแล้ว");
     } catch (error) {
       console.error("Error filling PDF:", error);
@@ -125,6 +142,7 @@ const InsertForm = () => {
   );
 };
 
+// ===== Styles =====
 const styles = StyleSheet.create({
   container: { padding: 20 },
   title: { fontSize: 18, fontWeight: "bold", marginBottom: 20 },
