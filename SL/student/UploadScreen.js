@@ -1,36 +1,21 @@
-import React, { useState } from "react";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ScrollView, 
-  Alert,
-  Linking,
-  Platform,
-  Modal,
-  Dimensions,
-  Image,
-  ActivityIndicator
-} from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Platform, Modal, Dimensions, Image, ActivityIndicator } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { db, auth } from '../database/firebase';
+import { doc, getDoc, collection, query, getDocs, deleteDoc } from 'firebase/firestore';
 
 const { width, height } = Dimensions.get('window');
 
 const handleOpenUploadedFile = async (file) => {
   try {
     if (!file?.uri) return;
-
-    // ตรวจสอบว่าอุปกรณ์รองรับการแชร์ไฟล์
     const isAvailable = await Sharing.isAvailableAsync();
     if (!isAvailable) {
       Alert.alert("ไม่สามารถเปิดไฟล์ได้", "อุปกรณ์ของคุณไม่รองรับการเปิดไฟล์นี้");
       return;
     }
-
-    // สำหรับไฟล์ local ที่เราอัปโหลด สามารถเปิดด้วย Sharing.shareAsync
     await Sharing.shareAsync(file.uri);
   } catch (error) {
     console.error(error);
@@ -39,247 +24,296 @@ const handleOpenUploadedFile = async (file) => {
 };
 
 const UploadScreen = ({ navigation, route }) => {
-  const initialSurveyData = route?.params?.surveyData || {
-    familyStatus: "",
-    livingWith: "",
-    fatherIncome: "",
-    motherIncome: "",
-    legalStatus: "",
-    guardianIncome: "",
-    parentLegalStatus: "",
-  };
-
-  const [hasCompletedSurvey, setHasCompletedSurvey] = useState(!!route?.params?.surveyData);
-  const [surveyData, setSurveyData] = useState(initialSurveyData);
+  const [surveyData, setSurveyData] = useState(null);
+  const [surveyDocId, setSurveyDocId] = useState(null); // เก็บ Document ID
+  const [isLoading, setIsLoading] = useState(true);
   const [uploads, setUploads] = useState({});
   const [uploadProgress, setUploadProgress] = useState({});
-  
-  // state สำหรับ modal
   const [showFileModal, setShowFileModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedDocTitle, setSelectedDocTitle] = useState('');
   const [fileContent, setFileContent] = useState(null);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [contentType, setContentType] = useState('');
-
-  // state สำหรับการ zoom รูปภาพ
   const [imageZoom, setImageZoom] = useState(1);
   const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
 
-  const generateDocumentsList = (data) => {
-    let documents = [];
+  useEffect(() => {
+    const fetchSurveyData = async () => {
+      try {
+        setIsLoading(true);
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          console.log("No user logged in, cannot fetch survey data.");
+          setSurveyData(null);
+          setIsLoading(false);
+          return;
+        }
 
+        const surveyCollectionRef = collection(db, 'users', currentUser.uid, 'survey');
+        const q = query(surveyCollectionRef);
+
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          const docSnap = querySnapshot.docs[0];
+          console.log("Survey data fetched:", docSnap.data());
+          setSurveyData(docSnap.data());
+          setSurveyDocId(docSnap.id); // บันทึก Doc ID ที่นี่
+        } else {
+          console.log("No survey data found for this user.");
+          setSurveyData(null);
+          setSurveyDocId(null);
+        }
+      } catch (error) {
+        console.error("Error fetching survey data: ", error);
+        Alert.alert("Error", "Failed to load survey data.");
+        setSurveyData(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchSurveyData();
+  }, []);
+
+  // ฟังก์ชันลบข้อมูลแบบสอบถามจาก Firebase
+  const deleteSurveyData = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser || !surveyDocId) {
+      console.log("No user or survey data to delete.");
+      return;
+    }
+    try {
+      const surveyDocRef = doc(db, 'users', currentUser.uid, 'survey', surveyDocId);
+      await deleteDoc(surveyDocRef);
+      console.log("Survey data successfully deleted from Firestore!");
+    } catch (error) {
+      console.error("Error deleting survey data: ", error);
+      Alert.alert("Error", "Failed to delete old survey data.");
+    }
+  };
+
+  const generateDocumentsList = (data) => {
+    if (!data) return [];
+    let documents = [];
     documents.push(
-      {
+      { 
         id: 'form_101',
         title: 'แบบฟอร์ม กยศ. 101',
-        description: '(กรอกข้อมูลตามจริงให้ครบถ้วน)',
-        required: true,
-        downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link'
+        description: '(กรอกข้อมูลตามจริงให้ครบถ้วน)', 
+        required: true, 
+        downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link' 
       },
-      {
-        id: 'volunteer_doc',
-        title: 'เอกสารจิตอาสา',
-        description: '(กิจกรรมในปีการศึกษา 2567 อย่างน้อย 1 รายการ)',
-        required: true
+      { 
+        id: 'volunteer_doc', 
+        title: 'เอกสารจิตอาสา', 
+        description: '(กิจกรรมในปีการศึกษา 2567 อย่างน้อย 1 รายการ)', 
+        required: true 
       },
-      {
-        id: 'consent_student_form',
-        title: 'หนังสือยินยอมเปิดเผยข้อมูลของผู้กู้',
-        downloadUrl:'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing',
-        required: true
+      { 
+        id: 'consent_student_form', 
+        title: 'หนังสือยินยอมเปิดเผยข้อมูลของผู้กู้', 
+        downloadUrl: 'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing', 
+        required: true 
       },
-      {
-        id: 'id_copies_student',
+      { 
+        id: 'id_copies_student', 
         title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของผู้กู้',
-        required: true
+        required: true 
       }
     );
-
-    // กรณี ก: ครอบครัวปกติ
     if (data.familyStatus === "ก") {
       documents.push(
-        {
-          id: 'consent_fahter_form',
-          title: 'หนังสือยินยอมเปิดเผยข้อมูลของบิดา',
-          downloadUrl:'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing',
-          required: true
+        { 
+          id: 'consent_fahter_form', 
+          title: 'หนังสือยินยอมเปิดเผยข้อมูลของบิดา', 
+          downloadUrl: 'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing', 
+          required: true },
+        { 
+          id: 'id_copies_father', 
+          title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของบิดา', 
+          required: true 
         },
-        {
-          id: 'id_copies_father',
-          title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของบิดา',
-          required: true
+        { 
+          id: 'consent_mother_form', 
+          title: 'หนังสือยินยอมเปิดเผยข้อมูลของมารดา', 
+          downloadUrl: 'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing', 
+          required: true 
         },
-        {
-          id: 'consent_mother_form',
-          title: 'หนังสือยินยอมเปิดเผยข้อมูลของมารดา',
-          downloadUrl:'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing',
-          required: true
-        },
-        {
-          id: 'id_copies_mother',
-          title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของมารดา',
-          required: true
+        { 
+          id: 'id_copies_mother', 
+          title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของมารดา', 
+          required: true 
         },
       );
-      
-      // เอกสารรายได้บิดา
-      if (data.fatherIncome === "มี") {
-        documents.push({
-          id: 'father_income',
-          title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของบิดา',
-          description: '(เอกสารอายุไม่เกิน 3 เดือน)',
-          required: true
-        });
-      } else {
-        documents.push({
-          id: 'father_income_cert',
-          title: 'หนังสือรับรองรายได้ กยศ. 102 ของบิดา',
-          description: 'พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)',
-          downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link',
-          required: true
-        });
-      }
-      
-      // เอกสารรายได้มารดา
-      if (data.motherIncome === "มี") {
-        documents.push({
-          id: 'mother_income',
-          title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของมารดา',
-          description: '(เอกสารอายุไม่เกิน 3 เดือน)',
-          required: true
-        });
-      } else {
-        documents.push({
-          id: 'mother_income_cert',
-          title: 'หนังสือรับรองรายได้ กยศ. 102 ของมารดา',
-          description: 'พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)',
-          downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link',
-          required: true
-        });
-      }
-    } 
-    // กรณี ข: พ่อแม่หย่าร้าง/เลิกร้าง/เสียชีวิต
-    else if (data.familyStatus === "ข") {
+      if (data.fatherIncome === "มี") 
+        { documents.push(
+          { 
+            id: 'father_income', 
+            title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของบิดา', 
+            description: '(เอกสารอายุไม่เกิน 3 เดือน)', 
+            required: true 
+          }); 
+        } else { 
+          documents.push(
+            { id: 'father_income_cert', 
+              title: 'หนังสือรับรองรายได้ กยศ. 102 ของบิดา', 
+              downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link', 
+              required: true 
+            },
+            { id: 'fa_id_copies_gov', 
+              title: 'สำเนาบัตรข้าราชการผู้รับรอง', 
+              description: 'สำหรับรับรองรายได้ เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น',
+              required: true 
+            }
+            
+          );
+          }
+      if (data.motherIncome === "มี") 
+        { 
+          documents.push(
+            { 
+              id: 'mother_income', 
+              title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของมารดา', 
+              description: 'เอกสารอายุไม่เกิน 3 เดือน', 
+              required: true 
+            }); 
+          } else { 
+            documents.push(
+              { id: 'mother_income_cert', 
+                title: 'หนังสือรับรองรายได้ กยศ. 102 ของมารดา', 
+                downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link', 
+                required: true 
+              },
+              { id: 'ma_id_copies_gov', 
+                title: 'สำเนาบัตรข้าราชการผู้รับรอง', 
+                description: 'สำหรับรับรองรายได้ เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น',
+                required: true 
+              }
+            ); 
+            }
+    } else if (data.familyStatus === "ข") {
       let parent = data.livingWith === "บิดา" ? "บิดา" : "มารดา";
       documents.push(
-        {
-          id: 'consent_form_single_parent',
-          title: `หนังสือยินยอมเปิดเผยข้อมูลของ ${parent}`,
-          downloadUrl:'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing',
-          required: true
+        { 
+          id: 'consent_form_single_parent', 
+          title: `หนังสือยินยอมเปิดเผยข้อมูลของ ${parent}`, 
+          downloadUrl: 'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing', 
+          required: true 
         },
-        {
-          id: 'id_copies_single_parent',
-          title: `สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของ ${parent}`,
-          required: true
+        { 
+          id: 'id_copies_single_parent', 
+          title: `สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของ ${parent}`, 
+          required: true 
         }
       );
-      
-      // เอกสารแสดงสถานะทางกฎหมาย
-      if (data.legalStatus === "มี") {
-        documents.push({
-          id: 'legal_status',
-          title: 'สำเนาใบหย่า (กรณีหย่าร้าง) หรือ สำเนาใบมรณบัตร (กรณีเสียชีวิต)',
-          required: true
-        });
-      } else {
-        documents.push({
-          id: 'family_status_cert',
-          title: 'หนังสือรับรองสถานภาพครอบครัว',
-          description: 'พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)',
-          downloadUrl:'https://drive.google.com/file/d/1m98sSlZqAi_YK3PQ2-a9FMIEri1RlENB/view?usp=drive_link',
-          required: true
-        });
-      }
-      
-      // เอกสารรายได้พ่อ/แม่เดี่ยว
-      const hasIncome = (data.livingWith === "บิดา" && data.fatherIncome === "มี") ||
-                       (data.livingWith === "มารดา" && data.motherIncome === "มี");
-      
-      if (hasIncome) {
-        documents.push({
-          id: 'single_parent_income',
-          title: `หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของ${parent}`,
-          description: '(เอกสารอายุไม่เกิน 3 เดือน)',
-          required: true
-        });
-      } else {
-        documents.push({
-          id: 'single_parent_income_cert',
-          title: `หนังสือรับรองรายได้ กยศ. 102 ของ${parent}`,
-          description: 'พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)',
-          downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link',
-          required: true
-        });
-      }
-    } 
-    // กรณี ค: มีผู้ปกครอง
-    else if (data.familyStatus === "ค") {
+      if (data.legalStatus === "มี") { 
+        documents.push(
+          { 
+            id: 'legal_status', 
+            title: 'สำเนาใบหย่า (กรณีหย่าร้าง) หรือ สำเนาใบมรณบัตร (กรณีเสียชีวิต)', 
+            required: true 
+          }); 
+        } else { 
+          documents.push(
+            { 
+              id: 'family_status_cert', 
+              title: 'หนังสือรับรองสถานภาพครอบครัว', 
+              downloadUrl: 'https://drive.google.com/file/d/1m98sSlZqAi_YK3PQ2-a9FMIEri1RlENB/view?usp=drive_link',
+              required: true
+            },
+            { 
+              id: 'fam_id_copies_gov', 
+              title: 'สำเนาบัตรข้าราชการผู้รับรอง', 
+              description: 'สำหรับรับรองสถานภาพครอบครัว เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น',
+              required: true 
+            }
+          ); 
+          }
+      // const hasIncome = (data.livingWith === "บิดา" && data.fatherIncome === "มี") || 
+      //                   (data.livingWith === "มารดา" && data.motherIncome === "มี");
+      // if (hasIncome) {
+      //   documents.push(
+      //     { 
+      //       id: 'single_parent_income', 
+      //       title: `หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของ${parent}`, 
+      //       description: '(เอกสารอายุไม่เกิน 3 เดือน)', 
+      //       required: true 
+      //     }); 
+      //   } else { 
+      //     documents.push(
+      //       { 
+      //         id: 'single_parent_income_cert', 
+      //         title: `หนังสือรับรองรายได้ กยศ. 102 ของ${parent}`, 
+      //         description: 'พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)', 
+      //         downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link', 
+      //         required: true 
+      //       }); 
+      //     }
+    } else if (data.familyStatus === "ค") {
       documents.push(
-        {
-          id: 'guardian_consent',
-          title: 'หนังสือยินยอมเปิดเผยข้อมูล ของผู้ปกครอง',
-          downloadUrl:'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing',
-          required: true
+        { 
+          id: 'guardian_consent', 
+          title: 'หนังสือยินยอมเปิดเผยข้อมูล ของผู้ปกครอง', 
+          downloadUrl: 'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing', 
+          required: true 
         },
-        {
-          id: 'guardian_id_copies',
-          title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้อง ของผู้ปกครอง',
-          required: true
+        { 
+          id: 'guardian_id_copies', 
+          title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้อง ของผู้ปกครอง', 
+          required: true 
         }
       );
-      
-      // เอกสารรายได้ผู้ปกครอง
-      if (data.guardianIncome === "มี") {
-        documents.push({
-          id: 'guardian_income',
-          title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของผู้ปกครอง',
-          description: '(เอกสารอายุไม่เกิน 3 เดือน)',
+      if (data.guardianIncome === "มี") 
+        { 
+          documents.push(
+            { 
+              id: 'guardian_income', 
+              title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของผู้ปกครอง', 
+              description: '(เอกสารอายุไม่เกิน 3 เดือน)', 
+              required: true 
+            }); 
+          } else { 
+            documents.push(
+              { 
+                id: 'guardian_income_cert',
+                title: 'หนังสือรับรองรายได้ กยศ. 102 ของผู้ปกครอง', 
+                downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link', 
+                required: true 
+              },
+              { 
+                id: 'guar_id_copies_gov', 
+                title: 'สำเนาบัตรข้าราชการผู้รับรอง', 
+                description: 'สำหรับรับรองรายได้ เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น',
+                required: true 
+              }
+            ); 
+            }
+      if (data.parentLegalStatus === "มี") { 
+        documents.push(
+          { 
+            id: 'parent_legal_status', 
+            title: 'สำเนาใบหย่า (กรณีหย่าร้าง) หรือ สำเนาใบมรณบัตร (กรณีเสียชีวิต)', 
+            description: '', 
+            required: true 
+          }); 
+        }
+      documents.push(
+        { 
+          id: 'family_status_required', 
+          title: 'หนังสือรับรองสถานภาพครอบครัว', 
           required: true
-        });
-      } else {
-        documents.push({
-          id: 'guardian_income_cert',
-          title: 'หนังสือรับรองรายได้ กยศ. 102 ของผู้ปกครอง',
-          description: 'พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)',
-          downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link',
-          required: true
-        });
-      }
-      
-      // เอกสารสถานะกฎหมายของบิดามารดา
-      if (data.parentLegalStatus === "มี") {
-        documents.push({
-          id: 'parent_legal_status',
-          title: 'สำเนาใบหย่า (กรณีหย่าร้าง) หรือ สำเนาใบมรณบัตร (กรณีเสียชีวิต)',
-          description: '',
-          required: true
-        });
-      }
-      // เอกสารแสดงสถานภาพครอบครัว (บังคับสำหรับกรณี ค)
-      documents.push({
-        id: 'family_status_required',
-        title: 'หนังสือรับรองสถานภาพครอบครัว',
-        description: 'พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)',
-        required: true
-      });
+        },
+        { id: 'fam_id_copies_gov', 
+            title: 'สำเนาบัตรข้าราชการผู้รับรอง', 
+            description: 'สำหรับรับรองสถานภาพครอบครัว เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น',
+            required: true 
+        }
+      );
     }
-    
     return documents;
   };
-
-  // ฟังก์ชันสำหรับจำลองการทำแบบสอบถาม
-  const handleStartSurvey = () => {
-    navigation.navigate('Document Reccommend', {
-      onSurveyComplete: (data) => {
-        setSurveyData(data);
-        setHasCompletedSurvey(true);
-      }
-    });
-  };
-
-  // ฟังก์ชันแสดง modal ของไฟล์
+  const handleStartSurvey = () => { navigation.navigate('Document Reccommend', { onSurveyComplete: (data) => { setSurveyData(data); } }); };
   const handleShowFileModal = async (docId, docTitle) => {
     const file = uploads[docId];
     if (file) {
@@ -287,42 +321,19 @@ const UploadScreen = ({ navigation, route }) => {
       setSelectedDocTitle(docTitle);
       setShowFileModal(true);
       setIsLoadingContent(true);
-      
-      try {
-        await loadFileContent(file);
-      } catch (error) {
-        console.error('Error loading file content:', error);
-        Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดเนื้อหาไฟล์ได้');
-      } finally {
-        setIsLoadingContent(false);
-      }
+      try { await loadFileContent(file); } catch (error) { console.error('Error loading file content:', error); Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดเนื้อหาไฟล์ได้'); } finally { setIsLoadingContent(false); }
     }
   };
-
-  // ฟังก์ชันโหลดเนื้อหาไฟล์ที่ปรับปรุงแล้ว
   const loadFileContent = async (file) => {
     try {
       const mimeType = file.mimeType?.toLowerCase() || '';
       const fileName = file.filename?.toLowerCase() || '';
-      
-      // ตรวจสอบประเภทไฟล์แบบละเอียดขึ้น
-      if (mimeType.startsWith('image/') || 
-          fileName.endsWith('.jpg') || 
-          fileName.endsWith('.jpeg') || 
-          fileName.endsWith('.png') || 
-          fileName.endsWith('.gif') || 
-          fileName.endsWith('.bmp') || 
-          fileName.endsWith('.webp')) {
+      if (mimeType.startsWith('image/') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png') || fileName.endsWith('.gif') || fileName.endsWith('.bmp') || fileName.endsWith('.webp')) {
         setContentType('image');
         setFileContent(file.uri);
-      } else if (mimeType.includes('text/') || 
-                 mimeType.includes('json') || 
-                 fileName.endsWith('.txt') ||
-                 fileName.endsWith('.json')) {
+      } else if (mimeType.includes('text/') || mimeType.includes('json') || fileName.endsWith('.txt') || fileName.endsWith('.json')) {
         setContentType('text');
-        const content = await FileSystem.readAsStringAsync(file.uri, {
-          encoding: FileSystem.EncodingType.UTF8,
-        });
+        const content = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.UTF8, });
         setFileContent(content);
       } else if (mimeType.includes('pdf') || fileName.endsWith('.pdf')) {
         setContentType('pdf');
@@ -337,8 +348,6 @@ const UploadScreen = ({ navigation, route }) => {
       setFileContent('ไม่สามารถอ่านไฟล์นี้ได้ กรุณาลองใหม่อีกครั้ง');
     }
   };
-
-  // ฟังก์ชันปิด modal พร้อมรีเซ็ต zoom
   const handleCloseModal = () => {
     setShowFileModal(false);
     setSelectedFile(null);
@@ -349,8 +358,6 @@ const UploadScreen = ({ navigation, route }) => {
     setImageZoom(1);
     setImagePosition({ x: 0, y: 0 });
   };
-
-  // ฟังก์ชันแปลงขนาดไฟล์
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -358,117 +365,74 @@ const UploadScreen = ({ navigation, route }) => {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
-
-  // ฟังก์ชันจำลองการอัพโหลดไฟล์
   const handleFileUpload = async (docId) => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: "*/*",
         copyToCacheDirectory: true,
       });
-
       if (result.canceled) return;
-
       const file = result.assets[0];
-
       setUploads((prev) => ({
         ...prev,
-        [docId]: {
-          filename: file.name,
-          uri: file.uri,
-          mimeType: file.mimeType,
-          size: file.size,
-          uploadDate: new Date().toLocaleString("th-TH"),
-          status: "completed",
-        },
+        [docId]: { filename: file.name, uri: file.uri, mimeType: file.mimeType, size: file.size, uploadDate: new Date().toLocaleString("th-TH"), status: "completed", },
       }));
     } catch (error) {
       Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถเลือกไฟล์ได้");
       console.error(error);
     }
   };
-
-  // ฟังก์ชันลบไฟล์ที่อัพโหลดแล้ว
   const handleRemoveFile = (docId) => {
-    Alert.alert(
-      "ลบไฟล์",
-      "คุณต้องการลบไฟล์นี้หรือไม่?",
-      [
-        { text: "ยกเลิก", style: "cancel" },
-        { text: "ลบ", style: "destructive", onPress: () => {
-          setUploads(prev => {
-            const newUploads = { ...prev };
-            delete newUploads[docId];
-            return newUploads;
-          });
-          handleCloseModal();
-        }}
-      ]
-    );
+    Alert.alert("ลบไฟล์", "คุณต้องการลบไฟล์นี้หรือไม่?", [{ text: "ยกเลิก", style: "cancel" }, { text: "ลบ", style: "destructive", onPress: () => { setUploads(prev => { const newUploads = { ...prev }; delete newUploads[docId]; return newUploads; }); handleCloseModal(); } }]);
   };
-
-  // ฟังก์ชันส่งเอกสาร
   const handleSubmitDocuments = () => {
     const documents = generateDocumentsList(surveyData);
     const requiredDocs = documents.filter(doc => doc.required);
     const uploadedRequiredDocs = requiredDocs.filter(doc => uploads[doc.id]);
-    
     if (uploadedRequiredDocs.length < requiredDocs.length) {
-      Alert.alert(
-        "เอกสารไม่ครบ",
-        `คุณยังอัพโหลดเอกสารไม่ครบ (${uploadedRequiredDocs.length}/${requiredDocs.length})`,
-        [{ text: "ตกลง" }]
-      );
+      Alert.alert("เอกสารไม่ครบ", `คุณยังอัพโหลดเอกสารไม่ครบ (${uploadedRequiredDocs.length}/${requiredDocs.length})`, [{ text: "ตกลง" }]);
       return;
     }
-
-    Alert.alert(
-      "ส่งเอกสารสำเร็จ",
-      "เอกสารของคุณได้ถูกส่งเรียบร้อยแล้ว",
-      [
-        { text: "ตกลง", onPress: () => {
-          setHasCompletedSurvey(false);
-          setSurveyData({});
-          setUploads({});
-          setUploadProgress({});
-        }}
-      ]
-    );
+    Alert.alert("ส่งเอกสารสำเร็จ", "เอกสารของคุณได้ถูกส่งเรียบร้อยแล้ว", [{ text: "ตกลง", onPress: () => { setSurveyData(null); setUploads({}); setUploadProgress({}); } }]);
   };
 
-  // ฟังก์ชันรีเซ็ตและทำแบบสอบถามใหม่
   const handleRetakeSurvey = () => {
     Alert.alert(
       "ทำแบบสอบถามใหม่",
       "การทำแบบสอบถามใหม่จะลบข้อมูลและไฟล์ที่อัพโหลดทั้งหมด\nคุณแน่ใจหรือไม่?",
       [
         { text: "ยกเลิก", style: "cancel" },
-        { text: "ตกลง", style: "destructive", onPress: () => {
-          setHasCompletedSurvey(false);
-          setSurveyData({});
-          setUploads({});
-          setUploadProgress({});
-        }}
+        {
+          text: "ตกลง",
+          style: "destructive",
+          onPress: async () => {
+            await deleteSurveyData(); // ลบข้อมูลใน Firebase ก่อน
+            setSurveyData(null);
+            setUploads({});
+            setUploadProgress({});
+          }
+        }
       ]
     );
   };
-  
-  // คำนวณสถิติการอัพโหลด
+
   const getUploadStats = () => {
     const documents = generateDocumentsList(surveyData);
     const requiredDocs = documents.filter(doc => doc.required);
     const uploadedDocs = documents.filter(doc => uploads[doc.id]);
     const uploadedRequiredDocs = requiredDocs.filter(doc => uploads[doc.id]);
-    
-    return {
-      total: documents.length,
-      required: requiredDocs.length,
-      uploaded: uploadedDocs.length,
-      uploadedRequired: uploadedRequiredDocs.length
-    };
+    return { total: documents.length, required: requiredDocs.length, uploaded: uploadedDocs.length, uploadedRequired: uploadedRequiredDocs.length };
   };
 
-  if (!hasCompletedSurvey) {
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#2563eb" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: '#475569' }}>กำลังโหลดข้อมูล...</Text>
+      </View>
+    );
+  }
+  if (!surveyData) {
     return (
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.welcomeCard}>
@@ -476,7 +440,6 @@ const UploadScreen = ({ navigation, route }) => {
           <Text style={styles.welcomeSubtitle}>
             จัดเตรียมและส่งเอกสารสำหรับการสมัครกู้ยืมเงิน กยศ. ได้ง่ายๆ ใน 3 ขั้นตอน
           </Text>
-          
           <View style={styles.stepContainer}>
             <View style={styles.stepItem}>
               <View style={styles.stepNumber}>
@@ -497,7 +460,6 @@ const UploadScreen = ({ navigation, route }) => {
               <Text style={styles.stepText}>ส่งเอกสารและรอการตรวจสอบ</Text>
             </View>
           </View>
-          
           <TouchableOpacity style={styles.primaryButton} onPress={handleStartSurvey}>
             <Text style={styles.primaryButtonText}>เริ่มทำแบบสอบถาม</Text>
           </TouchableOpacity>
@@ -508,24 +470,20 @@ const UploadScreen = ({ navigation, route }) => {
 
   const documents = generateDocumentsList(surveyData);
   const stats = getUploadStats();
-
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {/* Header Card */}
       <View style={styles.headerCard}>
         <Text style={styles.headerTitle}>อัพโหลดเอกสาร</Text>
         <Text style={styles.headerSubtitle}>
           <Text style={{ fontWeight: 'bold', color: '#3b82f6' }}>สถานภาพครอบครัว:</Text>{" "}
-          {surveyData.familyStatus === 'ก' ? 'บิดามารดาอยู่ด้วยกัน' : 
-            surveyData.familyStatus === 'ข' ? 'บิดา/มารดาหย่าร้าง/เสียชีวิต' : 
-            'มีผู้ปกครองดูแล'}
+          {surveyData.familyStatus === 'ก' ? 'บิดามารดาอยู่ด้วยกัน' :
+            surveyData.familyStatus === 'ข' ? 'บิดาหรือมารดาหย่าร้าง หรือเสียชีวิต หรือไม่สามารถติดต่อได้' :
+              'มีผู้ปกครอง ที่ไม่ใช่บิดามารดาดูแล'}
         </Text>
         <TouchableOpacity style={styles.retakeButton} onPress={handleRetakeSurvey}>
           <Text style={styles.retakeButtonText}>ทำแบบสอบถามใหม่</Text>
         </TouchableOpacity>
       </View>
-
-      {/* Progress Card */}
       <View style={styles.progressCard}>
         <Text style={styles.progressTitle}>สถานะการอัพโหลด</Text>
         <View style={styles.statsContainer}>
@@ -540,24 +498,22 @@ const UploadScreen = ({ navigation, route }) => {
           </View>
         </View>
         <View style={styles.progressBar}>
-          <View 
+          <View
             style={[
-              styles.progressFill, 
+              styles.progressFill,
               { width: `${(stats.uploadedRequired / stats.required) * 100}%` }
-            ]} 
+            ]}
           />
         </View>
         <Text style={styles.progressText}>
           {Math.round((stats.uploadedRequired / stats.required) * 100)}% เสร็จสิ้น
         </Text>
       </View>
-
-      {/* Documents List */}
       <View style={styles.documentsCard}>
         <Text style={styles.documentsTitle}>รายการเอกสารที่ต้องอัพโหลด</Text>
         {documents.map((doc, idx) => (
           <View key={doc.id} style={[
-            styles.documentItem, 
+            styles.documentItem,
             idx % 2 === 0 ? styles.documentItemEven : styles.documentItemOdd
           ]}>
             <View style={styles.documentHeader}>
@@ -565,66 +521,36 @@ const UploadScreen = ({ navigation, route }) => {
                 <Text style={styles.documentTitle}>{doc.title}</Text>
                 {doc.required && <Text style={styles.requiredBadge}>*จำเป็น</Text>}
               </View>
-
               {doc.downloadUrl && (
                 <TouchableOpacity
-                  onPress={() => {
-                    Linking.openURL(doc.downloadUrl).catch(() =>
-                      Alert.alert("ไม่สามารถดาวน์โหลดไฟล์ได้")
-                    );
-                  }}
+                  onPress={() => { Linking.openURL(doc.downloadUrl).catch(() => Alert.alert("ไม่สามารถดาวน์โหลดไฟล์ได้")); }}
                   style={styles.downloadButton}
                 >
                   <Text style={styles.downloadButtonText}>⬇️</Text>
                 </TouchableOpacity>
               )}
             </View>
-
-            {doc.description ? (
-              <Text style={styles.documentDescription}>{doc.description}</Text>
-            ) : null}
-
-            {/* Upload Area */}
+            {doc.description ? (<Text style={styles.documentDescription}>{doc.description}</Text>) : null}
             <View style={styles.uploadArea}>
               {uploadProgress[doc.id] !== undefined ? (
                 <View style={styles.uploadProgressContainer}>
-                  <Text style={styles.uploadProgressText}>
-                    กำลังอัพโหลด... {uploadProgress[doc.id]}%
-                  </Text>
+                  <Text style={styles.uploadProgressText}> กำลังอัพโหลด... {uploadProgress[doc.id]}% </Text>
                   <View style={styles.uploadProgressBar}>
-                    <View 
-                      style={[
-                        styles.uploadProgressFill, 
-                        { width: `${uploadProgress[doc.id]}%` }
-                      ]} 
-                    />
+                    <View style={[styles.uploadProgressFill, { width: `${uploadProgress[doc.id]}%` }]} />
                   </View>
                 </View>
               ) : uploads[doc.id] ? (
                 <View style={styles.uploadedContainer}>
-                  <TouchableOpacity 
-                    style={{ flex: 1 }}
-                    onPress={() => handleShowFileModal(doc.id, doc.title)}
-                  >
-                    <Text style={styles.uploadedFileName}>
-                      ✅ {uploads[doc.id].filename}
-                    </Text>
-                    <Text style={styles.uploadedDate}>
-                      อัพโหลดเมื่อ: {uploads[doc.id].uploadDate}
-                    </Text>
+                  <TouchableOpacity style={{ flex: 1 }} onPress={() => handleShowFileModal(doc.id, doc.title)} >
+                    <Text style={styles.uploadedFileName}> ✅ {uploads[doc.id].filename} </Text>
+                    <Text style={styles.uploadedDate}> อัพโหลดเมื่อ: {uploads[doc.id].uploadDate} </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.removeButton} 
-                    onPress={() => handleRemoveFile(doc.id)}
-                  >
+                  <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveFile(doc.id)} >
                     <Text style={styles.removeButtonText}>🗑️</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
-                <TouchableOpacity 
-                  style={styles.uploadButton} 
-                  onPress={() => handleFileUpload(doc.id)}
-                >
+                <TouchableOpacity style={styles.uploadButton} onPress={() => handleFileUpload(doc.id)} >
                   <Text style={styles.uploadButtonText}>📁 เลือกไฟล์</Text>
                 </TouchableOpacity>
               )}
@@ -632,13 +558,8 @@ const UploadScreen = ({ navigation, route }) => {
           </View>
         ))}
       </View>
-
-      {/* Submit Button */}
-      <TouchableOpacity 
-        style={[
-          styles.submitButton,
-          stats.uploadedRequired < stats.required && styles.submitButtonDisabled
-        ]} 
+      <TouchableOpacity
+        style={[styles.submitButton, stats.uploadedRequired < stats.required && styles.submitButtonDisabled]}
         onPress={handleSubmitDocuments}
         disabled={stats.uploadedRequired < stats.required}
       >
@@ -646,96 +567,42 @@ const UploadScreen = ({ navigation, route }) => {
           {stats.uploadedRequired >= stats.required ? 'ส่งเอกสาร' : `ส่งเอกสาร (${stats.uploadedRequired}/${stats.required})`}
         </Text>
       </TouchableOpacity>
-
-      {/* File Preview Modal - Enhanced */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={showFileModal}
-        onRequestClose={handleCloseModal}
-      >
+      <Modal animationType="slide" transparent={true} visible={showFileModal} onRequestClose={handleCloseModal} >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>รายละเอียดไฟล์</Text>
-              <TouchableOpacity 
-                style={styles.closeButton} 
-                onPress={handleCloseModal}
-              >
+              <TouchableOpacity style={styles.closeButton} onPress={handleCloseModal} >
                 <Text style={styles.closeButtonText}>✕</Text>
               </TouchableOpacity>
             </View>
-
             {selectedFile && (
               <View style={styles.modalContent}>
                 <View style={styles.fileInfoCard}>
                   <View style={styles.fileIcon}>
                     <Text style={styles.fileIconText}>📄</Text>
                   </View>
-                  
                   <View style={styles.fileDetails}>
                     <Text style={styles.modalDocTitle}>{selectedDocTitle}</Text>
                     <Text style={styles.fileName}>{selectedFile.filename}</Text>
-                    
                     <View style={styles.fileMetadata}>
-                      <View style={styles.metadataItem}>
-                        <Text style={styles.metadataLabel}>ขนาดไฟล์:</Text>
-                        <Text style={styles.metadataValue}>
-                          {formatFileSize(selectedFile.size)}
-                        </Text>
-                      </View>
-                      
-                      <View style={styles.metadataItem}>
-                        <Text style={styles.metadataLabel}>ประเภท:</Text>
-                        <Text style={styles.metadataValue}>
-                          {selectedFile.mimeType || 'ไม่ระบุ'}
-                        </Text>
-                      </View>
-                      
-                      <View style={styles.metadataItem}>
-                        <Text style={styles.metadataLabel}>อัพโหลดเมื่อ:</Text>
-                        <Text style={styles.metadataValue}>
-                          {selectedFile.uploadDate}
-                        </Text>
-                      </View>
-                      
-                      <View style={styles.metadataItem}>
-                        <Text style={styles.metadataLabel}>สถานะ:</Text>
-                        <Text style={[styles.metadataValue, styles.statusSuccess]}>
-                          ✅ อัพโหลดสำเร็จ
-                        </Text>
-                      </View>
+                      <View style={styles.metadataItem}><Text style={styles.metadataLabel}>ขนาดไฟล์:</Text><Text style={styles.metadataValue}>{formatFileSize(selectedFile.size)}</Text></View>
+                      <View style={styles.metadataItem}><Text style={styles.metadataLabel}>ประเภท:</Text><Text style={styles.metadataValue}>{selectedFile.mimeType || 'ไม่ระบุ'}</Text></View>
+                      <View style={styles.metadataItem}><Text style={styles.metadataLabel}>อัพโหลดเมื่อ:</Text><Text style={styles.metadataValue}>{selectedFile.uploadDate}</Text></View>
+                      <View style={styles.metadataItem}><Text style={styles.metadataLabel}>สถานะ:</Text><Text style={[styles.metadataValue, styles.statusSuccess]}>✅ อัพโหลดสำเร็จ</Text></View>
                     </View>
                   </View>
                 </View>
-
                 <View style={styles.modalActions}>
-                  <TouchableOpacity 
-                    style={styles.actionButton}
-                    onPress={() => handleOpenUploadedFile(selectedFile)}
-                  >
+                  <TouchableOpacity style={styles.actionButton} onPress={() => handleOpenUploadedFile(selectedFile)} >
                     <Text style={styles.actionButtonText}>📤 แชร์ไฟล์</Text>
                   </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.actionButton, styles.actionButtonDanger]}
-                    onPress={() => {
-                      const docId = Object.keys(uploads).find(
-                        key => uploads[key] === selectedFile
-                      );
-                      if (docId) {
-                        handleRemoveFile(docId);
-                      }
-                    }}
-                  >
+                  <TouchableOpacity style={[styles.actionButton, styles.actionButtonDanger]} onPress={() => { const docId = Object.keys(uploads).find(key => uploads[key] === selectedFile); if (docId) { handleRemoveFile(docId); } }} >
                     <Text style={styles.actionButtonText}>🗑️ ลบไฟล์</Text>
                   </TouchableOpacity>
                 </View>
-
-                {/* File Content Preview - Enhanced */}
                 <View style={styles.filePreviewContainer}>
                   <Text style={styles.previewTitle}>ตัวอย่างไฟล์:</Text>
-                  
                   {isLoadingContent ? (
                     <View style={styles.loadingContainer}>
                       <ActivityIndicator size="large" color="#2563eb" />
@@ -745,122 +612,47 @@ const UploadScreen = ({ navigation, route }) => {
                     <View style={styles.previewContent}>
                       {contentType === 'image' && (
                         <View style={styles.imagePreviewContainer}>
-                          <ScrollView 
-                            horizontal 
-                            showsHorizontalScrollIndicator={false}
-                            showsVerticalScrollIndicator={false}
-                            maximumZoomScale={3}
-                            minimumZoomScale={0.5}
-                            bouncesZoom={true}
-                            contentContainerStyle={styles.imageScrollContainer}
-                          >
-                            <TouchableOpacity 
-                              activeOpacity={1}
-                              onPress={() => {
-                                setImageZoom(imageZoom === 1 ? 2 : 1);
-                              }}
-                            >
-                              <Image 
-                                source={{ uri: fileContent }} 
-                                style={[
-                                  styles.previewImageEnhanced,
-                                  {
-                                    transform: [
-                                      { scale: imageZoom },
-                                      { translateX: imagePosition.x },
-                                      { translateY: imagePosition.y }
-                                    ]
-                                  }
-                                ]}
-                                resizeMode="contain"
-                                onError={(error) => {
-                                  console.log('Image load error:', error);
-                                  setContentType('error');
-                                  setFileContent('ไม่สามารถโหลดรูปภาพได้ อาจเป็นเพราะไฟล์เสียหายหรือไม่รองรับ');
-                                }}
-                                onLoad={() => {
-                                  console.log('Image loaded successfully');
-                                }}
-                              />
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false} maximumZoomScale={3} minimumZoomScale={0.5} bouncesZoom={true} contentContainerStyle={styles.imageScrollContainer} >
+                            <TouchableOpacity activeOpacity={1} onPress={() => { setImageZoom(imageZoom === 1 ? 2 : 1); }} >
+                              <Image source={{ uri: fileContent }} style={[styles.previewImageEnhanced, { transform: [{ scale: imageZoom }, { translateX: imagePosition.x }, { translateY: imagePosition.y }] }]} resizeMode="contain" onError={(error) => { console.log('Image load error:', error); setContentType('error'); setFileContent('ไม่สามารถโหลดรูปภาพได้ อาจเป็นเพราะไฟล์เสียหายหรือไม่รองรับ'); }} onLoad={() => { console.log('Image loaded successfully'); }} />
                             </TouchableOpacity>
                           </ScrollView>
-                          
-                          {/* Image Controls */}
                           <View style={styles.imageControls}>
-                            <TouchableOpacity 
-                              style={styles.zoomButton}
-                              onPress={() => setImageZoom(Math.max(0.5, imageZoom - 0.5))}
-                            >
+                            <TouchableOpacity style={styles.zoomButton} onPress={() => setImageZoom(Math.max(0.5, imageZoom - 0.5))} >
                               <Text style={styles.zoomButtonText}>🔍−</Text>
                             </TouchableOpacity>
-                            
                             <Text style={styles.zoomText}>{Math.round(imageZoom * 100)}%</Text>
-                            
-                            <TouchableOpacity 
-                              style={styles.zoomButton}
-                              onPress={() => setImageZoom(Math.min(3, imageZoom + 0.5))}
-                            >
+                            <TouchableOpacity style={styles.zoomButton} onPress={() => setImageZoom(Math.min(3, imageZoom + 0.5))} >
                               <Text style={styles.zoomButtonText}>🔍+</Text>
                             </TouchableOpacity>
-                            
-                            <TouchableOpacity 
-                              style={styles.resetButton}
-                              onPress={() => {
-                                setImageZoom(1);
-                                setImagePosition({ x: 0, y: 0 });
-                              }}
-                            >
+                            <TouchableOpacity style={styles.resetButton} onPress={() => { setImageZoom(1); setImagePosition({ x: 0, y: 0 }); }} >
                               <Text style={styles.resetButtonText}>รีเซ็ต</Text>
                             </TouchableOpacity>
                           </View>
-                          
-                          {/* Image Info */}
                           <View style={styles.imageInfo}>
-                            <Text style={styles.imageInfoText}>
-                              💡 แตะรูปภาพเพื่อซูม หรือใช้ปุ่มด้านล่าง
-                            </Text>
+                            <Text style={styles.imageInfoText}>💡 แตะรูปภาพเพื่อซูม หรือใช้ปุ่มด้านล่าง</Text>
                           </View>
                         </View>
                       )}
-                      
                       {contentType === 'text' && (
                         <View style={styles.textPreviewEnhanced}>
-                          <ScrollView 
-                            style={styles.textPreviewContainer}
-                            showsVerticalScrollIndicator={true}
-                          >
+                          <ScrollView style={styles.textPreviewContainer} showsVerticalScrollIndicator={true} >
                             <Text style={styles.textPreview}>{fileContent}</Text>
                           </ScrollView>
-                          <Text style={styles.textInfo}>
-                            📄 เอกสารข้อความ - เลื่อนเพื่อดูเนื้อหาทั้งหมด
-                          </Text>
+                          <Text style={styles.textInfo}>📄 เอกสารข้อความ - เลื่อนเพื่อดูเนื้อหาทั้งหมด</Text>
                         </View>
                       )}
-                      
                       {(contentType === 'pdf' || contentType === 'other' || contentType === 'error') && (
                         <View style={styles.unsupportedContainer}>
-                          <Text style={styles.unsupportedIcon}>
-                            {contentType === 'pdf' ? '📄' : contentType === 'error' ? '❌' : '📁'}
-                          </Text>
+                          <Text style={styles.unsupportedIcon}>{contentType === 'pdf' ? '📄' : contentType === 'error' ? '❌' : '📁'}</Text>
                           <Text style={styles.unsupportedText}>{fileContent}</Text>
                           {contentType === 'pdf' && (
-                            <TouchableOpacity 
-                              style={styles.openExternalButton}
-                              onPress={() => handleOpenUploadedFile(selectedFile)}
-                            >
+                            <TouchableOpacity style={styles.openExternalButton} onPress={() => handleOpenUploadedFile(selectedFile)} >
                               <Text style={styles.openExternalButtonText}>🚀 เปิดด้วยแอปภายนอก</Text>
                             </TouchableOpacity>
                           )}
                           {contentType === 'error' && (
-                            <TouchableOpacity 
-                              style={[styles.openExternalButton, { backgroundColor: '#ef4444' }]}
-                              onPress={() => {
-                                setIsLoadingContent(true);
-                                loadFileContent(selectedFile).finally(() => {
-                                  setIsLoadingContent(false);
-                                });
-                              }}
-                            >
+                            <TouchableOpacity style={[styles.openExternalButton, { backgroundColor: '#ef4444' }]} onPress={() => { setIsLoadingContent(true); loadFileContent(selectedFile).finally(() => { setIsLoadingContent(false); }); }} >
                               <Text style={styles.openExternalButtonText}>🔄 ลองใหม่</Text>
                             </TouchableOpacity>
                           )}
@@ -877,7 +669,6 @@ const UploadScreen = ({ navigation, route }) => {
     </ScrollView>
   );
 };
-
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
@@ -885,12 +676,11 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
-  // Welcome Screen Styles
   welcomeCard: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
     padding: 28,
-    marginBottom: 20,
+    marginTop: 55,
     shadowColor: '#3b82f6',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
@@ -967,7 +757,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0.5,
   },
-  // Header Card Styles
   headerCard: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
@@ -1011,7 +800,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  // Progress Card Styles
   progressCard: {
     backgroundColor: '#ffffff',
     borderRadius: 18,
@@ -1075,7 +863,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 2,
   },
-  // Documents List Styles
   documentsCard: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
@@ -1202,7 +989,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  // Submit Button
   submitButton: {
     backgroundColor: '#10b981',
     paddingVertical: 16,
@@ -1242,8 +1028,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
-  
-  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1378,8 +1162,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  
-  // File Preview Styles
   filePreviewContainer: {
     marginTop: 20,
     borderTopWidth: 1,
@@ -1405,8 +1187,6 @@ const styles = StyleSheet.create({
     minHeight: 200,
     maxHeight: 500,
   },
-  
-  // Enhanced Image Preview Styles
   imagePreviewContainer: {
     backgroundColor: '#000000',
     borderRadius: 12,
@@ -1477,8 +1257,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     opacity: 0.9,
   },
-  
-  // Enhanced Text Preview Styles
   textPreviewEnhanced: {
     backgroundColor: '#f8fafc',
     borderRadius: 12,
@@ -1503,8 +1281,6 @@ const styles = StyleSheet.create({
     color: '#3730a3',
     textAlign: 'center',
   },
-  
-  // Enhanced Unsupported Container
   unsupportedContainer: {
     alignItems: 'center',
     padding: 40,
