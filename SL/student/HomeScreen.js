@@ -11,7 +11,6 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../database/firebase";
@@ -99,7 +98,11 @@ const HomeScreen = ({ navigation }) => {
             onChangeText={(text) => setSearchText(text)}
           />
         </View>
-        <Ionicons name="person-circle-outline" size={30} color="#333" />
+        
+        {/* กดไอคอนเพื่อไปที่ ProfileScreen */}
+        <TouchableOpacity onPress={() => navigation.navigate("ProfileScreen")}>
+          <Ionicons name="person-circle-outline" size={30} color="#333" />
+        </TouchableOpacity>
       </View>
 
       {/* ถ้าโหลดอยู่ให้แสดง spinner */}
@@ -116,7 +119,7 @@ const HomeScreen = ({ navigation }) => {
             <NewsItem item={item} navigation={navigation} />
           )}
           keyExtractor={(item) => item.id}
-        />  
+        />
       )}
 
       <StatusBar style="auto" />
