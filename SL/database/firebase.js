@@ -1,11 +1,8 @@
 // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
-import { getAuth, initializeAuth, getReactNativePersistence } from "firebase/auth";
-import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
-// Import getStorage function from firebase/storage
-import { getStorage } from "firebase/storage";
-
+import { initializeApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+import { getAuth, getReactNativePersistence } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -23,13 +20,12 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
+// Firestore initialization
 export const db = getFirestore(app);
 
-// Use getAuth instead of initializeAuth to avoid the "already-initialized" error
-const auth = getAuth(app);
+// เริ่มต้น Firebase Auth (Firebase v9+ จะใช้ AsyncStorage โดยอัตโนมัติ)
+export const auth = getAuth(app);
 
-// Export the storage instance with a clear, correct name
+// Initialize Firebase Storage
 export const storage = getStorage(app);
-
-// Export auth and the storage instance
-export { auth };
