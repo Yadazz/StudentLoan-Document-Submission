@@ -1,58 +1,84 @@
 import React, { useState } from "react";
 import { View, TextInput, Button, StyleSheet, Alert, Text } from "react-native";
-import { getAuth, signInWithEmailAndPassword } from "firebase/auth";  // นำเข้า getAuth และ signInWithEmailAndPassword แบบ modular
-import { auth } from "./database/firebase"; // ใช้ auth ที่ตั้งค่าไว้ใน firebase.js
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "./database/firebase";
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  // ฟังก์ชันสำหรับการเข้าสู่ระบบ
   const handleLogin = async () => {
     if (!email || !password) {
-      // ถ้าอีเมลหรือรหัสผ่านว่าง
       Alert.alert("กรุณากรอกข้อมูล", "โปรดป้อนอีเมลและรหัสผ่าน");
       return;
     }
 
+    setIsLoading(true);
+
     try {
-      const authInstance = getAuth(); // ใช้ getAuth
-      await signInWithEmailAndPassword(authInstance, email, password); // เข้าสู่ระบบด้วย email และ password
-      // ถ้าเข้าสู่ระบบสำเร็จ, ไปยังหน้า HomeScreen หรือหน้าอื่น ๆ
-      navigation.navigate("MainTabs");
+      console.log("Attempting to login with:", email);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log("Login successful:", userCredential.user.uid);
+      
+      // Navigate ไปหน้า MainTabs ทันทีหลังจาก login สำเร็จ
+      navigation.reset({
+      index: 0,
+      routes: [{ name: 'MainTabs' }],
+    });
+      
     } catch (error) {
-      // แสดงข้อความที่ถูกต้องสำหรับข้อผิดพลาด
+      console.log("Login error:", error.code, error.message);
+      
       if (error.code === "auth/invalid-email") {
         Alert.alert("เข้าสู่ระบบไม่สำเร็จ", "อีเมลไม่ถูกต้อง");
-      } else if (error.code === "auth/wrong-password") {
+      } else if (error.code === "auth/wrong-password" || error.code === "auth/invalid-credential") {
         Alert.alert("เข้าสู่ระบบไม่สำเร็จ", "รหัสผ่านไม่ถูกต้อง");
       } else if (error.code === "auth/user-not-found") {
         Alert.alert("เข้าสู่ระบบไม่สำเร็จ", "ผู้ใช้งานไม่พบ");
+      } else if (error.code === "auth/too-many-requests") {
+        Alert.alert("เข้าสู่ระบบไม่สำเร็จ", "ลองเข้าสู่ระบบหลายครั้งเกินไป โปรดรอสักครู่");
       } else {
         Alert.alert("เข้าสู่ระบบไม่สำเร็จ", error.message);
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <View style={styles.container}>
+      <Text style={styles.title}>เข้าสู่ระบบ</Text>
+      
       <TextInput
         style={styles.input}
         placeholder="อีเมล"
         value={email}
-        onChangeText={(text) => setEmail(text)}
-        keyboardType="email-address"  // ทำให้แป้นพิมพ์สำหรับอีเมล
+        onChangeText={(text) => setEmail(text.trim())}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
       />
+      
       <TextInput
         style={styles.input}
         placeholder="รหัสผ่าน"
         value={password}
         onChangeText={(text) => setPassword(text)}
-        secureTextEntry  // ซ่อนข้อความรหัสผ่าน
+        secureTextEntry
+        autoCapitalize="none"
+        autoCorrect={false}
       />
-      <Button title="เข้าสู่ระบบ" onPress={handleLogin} />
+      
+      <View style={styles.buttonContainer}>
+        <Button 
+          title={isLoading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"} 
+          onPress={handleLogin} 
+          disabled={isLoading}
+          color="#007AFF"
+        />
+      </View>
 
-      {/* ลิงค์สำหรับไปที่หน้าลงทะเบียน */}
       <Text style={styles.signupText}>
         ยังไม่มีบัญชี?{" "}
         <Text
@@ -70,23 +96,38 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",
-    padding: 16,
+    padding: 20,
     backgroundColor: "#f0f2f5",
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 30,
+    color: '#333',
   },
   input: {
     height: 50,
-    borderColor: "#ccc",
+    borderColor: "#ddd",
     borderWidth: 1,
-    marginBottom: 10,
-    paddingLeft: 10,
+    marginBottom: 15,
+    paddingHorizontal: 15,
     borderRadius: 8,
+    backgroundColor: '#fff',
+    fontSize: 16,
+  },
+  buttonContainer: {
+    marginVertical: 10,
   },
   signupText: {
-    marginTop: 20,
-    color: "#333",
+    marginTop: 30,
+    textAlign: 'center',
+    color: "#666",
+    fontSize: 16,
   },
   signupLink: {
-    color: "#1e90ff",
+    color: "#007AFF",
+    fontWeight: 'bold',
   },
 });
 
