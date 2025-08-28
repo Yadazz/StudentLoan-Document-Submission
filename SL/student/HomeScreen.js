@@ -117,7 +117,9 @@ const HomeScreen = ({ navigation }) => {
             onChangeText={(text) => setSearchText(text || "")}
           />
         </View>
-        <Ionicons name="person-circle-outline" size={30} color="#333" />
+        <TouchableOpacity onPress={() => navigation.navigate("ProfileScreen")}>
+          <Ionicons name="person-circle-outline" size={30} color="#333" />
+        </TouchableOpacity>
       </View>
 
       {loading && !refreshing ? (
