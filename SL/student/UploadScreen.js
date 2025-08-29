@@ -100,14 +100,14 @@ const UploadScreen = ({ navigation, route }) => {
       { 
         id: 'form_101',
         title: 'แบบฟอร์ม กยศ. 101',
-        description: '(กรอกข้อมูลตามจริงให้ครบถ้วน)', 
+        description: 'กรอกข้อมูลตามจริงให้ครบถ้วน', 
         required: true, 
         downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link' 
       },
       { 
         id: 'volunteer_doc', 
         title: 'เอกสารจิตอาสา', 
-        description: '(กิจกรรมในปีการศึกษา 2567 อย่างน้อย 1 รายการ)', 
+        description: 'กิจกรรมในปีการศึกษา 2567 อย่างน้อย 1 รายการ', 
         required: true 
       },
       { 
@@ -230,26 +230,32 @@ const UploadScreen = ({ navigation, route }) => {
             }
           ); 
           }
-      // const hasIncome = (data.livingWith === "บิดา" && data.fatherIncome === "มี") || 
-      //                   (data.livingWith === "มารดา" && data.motherIncome === "มี");
-      // if (hasIncome) {
-      //   documents.push(
-      //     { 
-      //       id: 'single_parent_income', 
-      //       title: `หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของ${parent}`, 
-      //       description: '(เอกสารอายุไม่เกิน 3 เดือน)', 
-      //       required: true 
-      //     }); 
-      //   } else { 
-      //     documents.push(
-      //       { 
-      //         id: 'single_parent_income_cert', 
-      //         title: `หนังสือรับรองรายได้ กยศ. 102 ของ${parent}`, 
-      //         description: 'พร้อมแนบสำเนาบัตรข้าราชการผู้รับรอง (เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น)', 
-      //         downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link', 
-      //         required: true 
-      //       }); 
-      //     }
+      const hasIncome = (data.livingWith === "บิดา" && data.fatherIncome === "มีรายได้ประจำ") || 
+                        (data.livingWith === "มารดา" && data.motherIncome === "มีรายได้ประจำ");
+      if (hasIncome) {
+        documents.push(
+          { 
+            id: 'single_parent_income', 
+            title: `หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของ${parent}`, 
+            description: 'เอกสารอายุไม่เกิน 3 เดือน', 
+            required: true 
+          }); 
+        } else { 
+          documents.push(
+            { 
+              id: 'single_parent_income_cert', 
+              title: `หนังสือรับรองรายได้ กยศ. 102 ของ${parent}`, 
+              downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link', 
+              required: true 
+            },
+            { 
+              id: '102_id_copies_gov', 
+              title: 'สำเนาบัตรข้าราชการผู้รับรอง', 
+              description: `สำหรับรับรองรายได้ของ${parent}  เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น`,
+              required: true 
+            }
+          ); 
+          }
     } else if (data.familyStatus === "ค") {
       documents.push(
         { 
