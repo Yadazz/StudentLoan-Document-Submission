@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, Alert, Button, Platform } from "rea
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { db, storage } from "../database/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { ref, getDownloadURL } from "firebase/storage";
 import { Buffer } from "buffer";
@@ -34,15 +34,22 @@ async function fillPdf(userData, existingPdfBytes, fontBytes) {
   firstPage.drawText(userData.email || "-", { x: 408.96, y: 679, size: 12, font: customFont });
   firstPage.drawText(userData.phone_num || "-", { x: 293.76, y: 556.56, size: 12, font: customFont });
 
-  // //ข้อมูลที่อยู่
-  // firstPage.drawText(userData.house_no || "-", { x: 194.4, y: 396, size: 12, font: customFont });
-  // firstPage.drawText(userData.villageNo || "-", { x: 249.84, y: 396, size: 12, font: customFont });
-  // firstPage.drawText(userData.alley || "-", { x: 459.36, y: 396, size: 12, font: customFont });
-  // firstPage.drawText(userData.road || "-", { x: 330.48, y: 626.56, size: 12, font: customFont });
-  // firstPage.drawText(userData.sub_district || "-", { x: 502.56, y: 626.56, size: 12, font: customFont });
-  // firstPage.drawText(userData.district || "-", { x: 122.4, y: 606.72, size: 12, font: customFont });
-  // firstPage.drawText(userData.province || "-", { x: 238.32, y: 606.72, size: 12, font: customFont });
-  // firstPage.drawText(userData.postcode || "-", { x: 388.8, y: 606.72, size: 12, font: customFont });
+  // ข้อมูลที่อยู่ปัจจุบัน (address_current)
+  if (userData.address_current) {
+    firstPage.drawText(userData.address_current.house_no || "-", { x: 194.4, y: 396, size: 12, font: customFont });
+    firstPage.drawText(userData.address_current.village || "-", { x: 249.84, y: 396, size: 12, font: customFont });
+    firstPage.drawText(userData.address_current.soi || "-", { x: 459.36, y: 396, size: 12, font: customFont });
+    firstPage.drawText(userData.address_current.road || "-", { x: 330.48, y: 626.56, size: 12, font: customFont });
+    firstPage.drawText(userData.address_current.sub_district || "-", { x: 502.56, y: 626.56, size: 12, font: customFont });
+    firstPage.drawText(userData.address_current.district || "-", { x: 122.4, y: 606.72, size: 12, font: customFont });
+    firstPage.drawText(userData.address_current.province || "-", { x: 238.32, y: 606.72, size: 12, font: customFont });
+    firstPage.drawText(userData.address_current.zipcode || "-", { x: 388.8, y: 606.72, size: 12, font: customFont });
+  }
+
+  // ข้อมูลที่อยู่ตามทะเบียนบ้าน (address_perm) - สามารถเพิ่มได้ตามต้องการ
+  // if (userData.address_perm) {
+  //   // เพิ่มตำแหน่งสำหรับที่อยู่ตามทะเบียนบ้าน
+  // }
 
   return pdfDoc.save();
 }
@@ -52,45 +59,153 @@ const InsertForm = () => {
   const [userData, setUserData] = useState({});
   const [loading, setLoading] = useState(true);
 
- useEffect(() => {
-  const fetchData = async () => {
+  // ฟังก์ชันเพิ่มข้อมูลส่วนตัว
+  const addPersonalData = async (newData) => {
     try {
       const auth = getAuth();
       const currentUser = auth.currentUser;
-      if (!currentUser) {
-        Alert.alert("กรุณาเข้าสู่ระบบก่อน");
-        setLoading(false);
-        return;
-      }
+      if (!currentUser) return;
 
-      // ดึงข้อมูลทั่วไป
       const userRef = doc(db, "users", currentUser.uid);
-      const userSnap = await getDoc(userRef);
-      let data = {};
-      if (userSnap.exists()) {
-        const u = userSnap.data();
-        data.name = u.name;
-        data.email = u.email;
-        data.phone_num = u.phone_num;
-      }
-
-      // ดึงข้อมูล address
-      const addressDocId = "fQpWS2TRoyCSEWYiA6kD"; // เปลี่ยนเป็น doc ที่ต้องการ
-      const addressRef = doc(db, "users", currentUser.uid, "address", addressDocId);
-      const addressSnap = await getDoc(addressRef);
-      if (addressSnap.exists()) {
-        data = { ...data, ...addressSnap.data() };
-      }
-
-      setUserData(data);
+      await updateDoc(userRef, newData);
+      
+      // อัพเดต state
+      setUserData(prev => ({ ...prev, ...newData }));
+      Alert.alert("สำเร็จ", "เพิ่มข้อมูลเรียบร้อยแล้ว");
     } catch (error) {
       Alert.alert("เกิดข้อผิดพลาด", error.message);
-    } finally {
-      setLoading(false);
     }
   };
-  fetchData();
-}, []);
+
+  // ฟังก์ชันเพิ่มข้อมูลที่อยู่
+  const addAddressData = async (addressType, newAddressData) => {
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+
+      const userRef = doc(db, "users", currentUser.uid);
+      const updateData = {
+        [addressType]: newAddressData
+      };
+      
+      await updateDoc(userRef, updateData);
+      
+      // อัพเดต state
+      setUserData(prev => ({ ...prev, [addressType]: newAddressData }));
+      Alert.alert("สำเร็จ", "เพิ่มข้อมูลที่อยู่เรียบร้อยแล้ว");
+    } catch (error) {
+      Alert.alert("เกิดข้อผิดพลาด", error.message);
+    }
+  };
+
+  // ฟังก์ชันเพิ่มข้อมูลใหม่ (ตัวอย่าง)
+  const handleAddSampleData = () => {
+    Alert.alert(
+      "เพิ่มข้อมูล",
+      "เลือกประเภทข้อมูลที่ต้องการเพิ่ม",
+      [
+        {
+          text: "ข้อมูลส่วนตัว",
+          onPress: () => {
+            // ตัวอย่างเพิ่มข้อมูลส่วนตัว
+            addPersonalData({
+              nickname: "แก้ว",
+              birthdate: "01/01/2000",
+              student_id: "650001234"
+            });
+          }
+        },
+        {
+          text: "ที่อยู่ปัจจุบัน", 
+          onPress: () => {
+            // ตัวอย่างเพิ่มข้อมูลที่อยู่
+            addAddressData("address_current", {
+              district: "เมือง",
+              house_no: "123",
+              moo: "5",
+              province: "กรุงเทพฯ",
+              road: "สุขุมวิท",
+              soi: "อโศก",
+              sub_district: "คลองเตย",
+              village: "บ้านสวย",
+              zipcode: "10110"
+            });
+          }
+        },
+        {
+          text: "ที่อยู่ตามทะเบียนบ้าน",
+          onPress: () => {
+            addAddressData("address_perm", {
+              district: "เมือง", 
+              house_no: "456",
+              province: "ชลบุรี",
+              sub_district: "บางละมุง",
+              zipcode: "20150"
+            });
+          }
+        },
+        { text: "ยกเลิก", style: "cancel" }
+      ]
+    );
+  };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const auth = getAuth();
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          Alert.alert("กรุณาเข้าสู่ระบบก่อน");
+          setLoading(false);
+          return;
+        }
+
+        // ดึงข้อมูลผู้ใช้หลัก (รวมข้อมูลที่อยู่ที่เป็น map)
+        const userRef = doc(db, "users", currentUser.uid);
+        const userSnap = await getDoc(userRef);
+        let data = {};
+        
+        if (userSnap.exists()) {
+          const userInfo = userSnap.data();
+          data = {
+            // ข้อมูลส่วนตัวหลัก
+            name: userInfo.name,
+            email: userInfo.email,
+            phone_num: userInfo.phone_num,
+            idCard: userInfo.idCard,
+            student_id: userInfo.student_id,
+            major: userInfo.major,
+            school: userInfo.school,
+            siblings_count: userInfo.siblings_count,
+            
+            // วันที่ (แปลง timestamp เป็น string)
+            birth_date: userInfo.birth_date ? userInfo.birth_date.toDate().toLocaleDateString('th-TH') : null,
+            createdAt: userInfo.createdAt ? userInfo.createdAt.toDate().toLocaleDateString('th-TH') : null,
+            
+            // ข้อมูลที่อยู่ (map type)
+            address_current: userInfo.address_current || null,
+            address_perm: userInfo.address_perm || null,
+            
+            // ข้อมูลพ่อแม่ (map type)
+            father_info: userInfo.father_info || null,
+            mother_info: userInfo.mother_info || null
+          };
+        }
+
+        setUserData(data);
+        console.log("ข้อมูลที่ดึงได้:", data);
+        
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        Alert.alert("เกิดข้อผิดพลาด", error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, []);
 
   const handlePdf = async () => {
     if (Platform.OS === "web") {
@@ -122,6 +237,74 @@ const InsertForm = () => {
     }
   };
 
+  // ฟังก์ชันแสดงข้อมูลที่อยู่แบบเป็นระเบียบ
+  const renderAddressData = (addressData, title) => {
+    if (!addressData) return null;
+    
+    return (
+      <View style={styles.addressSection}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {Object.entries(addressData).map(([key, value]) => (
+          <View key={key} style={styles.field}>
+            <Text style={styles.label}>{getFieldLabel(key)}</Text>
+            <Text style={styles.value}>{value || "-"}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  // ฟังก์ชันแสดงข้อมูลพ่อแม่
+  const renderParentData = (parentData, title) => {
+    if (!parentData) return null;
+    
+    return (
+      <View style={styles.parentSection}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {Object.entries(parentData).map(([key, value]) => (
+          <View key={key} style={styles.field}>
+            <Text style={styles.label}>{getFieldLabel(key)}</Text>
+            <Text style={styles.value}>{value || "-"}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  // ฟังก์ชันแปลงชื่อ field เป็นภาษาไทย
+  const getFieldLabel = (key) => {
+    const labels = {
+      // ข้อมูลส่วนตัว
+      name: "ชื่อ-นามสกุล",
+      email: "อีเมล",
+      phone_num: "เบอร์โทร",
+      idCard: "เลขบัตรประชาชน", 
+      student_id: "รหัสนักศึกษา",
+      major: "สาขาวิชา",
+      school: "คณะ/สำนัก",
+      siblings_count: "จำนวนพี่น้อง",
+      birth_date: "วันเกิด",
+      createdAt: "วันที่สร้างบัญชี",
+      
+      // ที่อยู่
+      house_no: "บ้านเลขที่",
+      moo: "หมู่ที่",
+      village: "หมู่บ้าน",
+      soi: "ซอย",
+      road: "ถนน", 
+      sub_district: "ตำบล/แขวง",
+      district: "อำเภอ/เขต",
+      province: "จังหวัด",
+      zipcode: "รหัสไปรษณีย์",
+      
+      // ข้อมูลพ่อแม่
+      citizen_id: "เลขบัตรประชาชน",
+      education_level: "ระดับการศึกษา",
+      phone_number: "เบอร์โทร"
+    };
+    return labels[key] || key;
+  };
+
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
@@ -133,23 +316,130 @@ const InsertForm = () => {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>ข้อมูลผู้ใช้และที่อยู่</Text>
-      {Object.entries(userData).map(([key, value]) => (
-        <View key={key} style={styles.field}>
-          <Text style={styles.label}>{key}</Text>
-          <Text style={styles.value}>{value}</Text>
+      
+      {/* ข้อมูลส่วนตัว */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>ข้อมูลส่วนตัว</Text>
+        <View style={styles.field}>
+          <Text style={styles.label}>ชื่อ-นามสกุล</Text>
+          <Text style={styles.value}>{userData.name || "-"}</Text>
         </View>
-      ))}
+        <View style={styles.field}>
+          <Text style={styles.label}>อีเมล</Text>
+          <Text style={styles.value}>{userData.email || "-"}</Text>
+        </View>
+        <View style={styles.field}>
+          <Text style={styles.label}>เบอร์โทร</Text>
+          <Text style={styles.value}>{userData.phone_num || "-"}</Text>
+        </View>
+        <View style={styles.field}>
+          <Text style={styles.label}>เลขบัตรประชาชน</Text>
+          <Text style={styles.value}>{userData.idCard || "-"}</Text>
+        </View>
+        <View style={styles.field}>
+          <Text style={styles.label}>รหัสนักศึกษา</Text>
+          <Text style={styles.value}>{userData.student_id || "-"}</Text>
+        </View>
+        <View style={styles.field}>
+          <Text style={styles.label}>สาขาวิชา</Text>
+          <Text style={styles.value}>{userData.major || "-"}</Text>
+        </View>
+        <View style={styles.field}>
+          <Text style={styles.label}>คณะ/สำนัก</Text>
+          <Text style={styles.value}>{userData.school || "-"}</Text>
+        </View>
+        <View style={styles.field}>
+          <Text style={styles.label}>วันเกิด</Text>
+          <Text style={styles.value}>{userData.birth_date || "-"}</Text>
+        </View>
+        <View style={styles.field}>
+          <Text style={styles.label}>จำนวนพี่น้อง</Text>
+          <Text style={styles.value}>{userData.siblings_count || "-"}</Text>
+        </View>
+      </View>
+
+      {/* ข้อมูลที่อยู่ */}
+      {userData.address_current && renderAddressData(userData.address_current, "ที่อยู่ปัจจุบัน")}
+      {userData.address_perm && renderAddressData(userData.address_perm, "ที่อยู่ตามทะเบียนบ้าน")}
+      
+      {/* ข้อมูลพ่อแม่ */}
+      {userData.father_info && renderParentData(userData.father_info, "ข้อมูลบิดา")}
+      {userData.mother_info && renderParentData(userData.mother_info, "ข้อมูลมารดา")}
+      
+      {/* แสดงที่อยู่อื่นๆ ถ้ามี */}
+      {Object.entries(userData)
+        .filter(([key]) => key.startsWith('address_') && key !== 'address_current' && key !== 'address_perm')
+        .map(([key, value]) => renderAddressData(value, `ที่อยู่ (${key})`))
+      }
+
       <Button title="บันทึกลง PDF" onPress={handlePdf} />
+      
+      <View style={{ marginTop: 20 }}>
+        <Button 
+          title="เพิ่มข้อมูลตัวอย่าง" 
+          onPress={handleAddSampleData}
+          color="#28a745"
+        />
+      </View>
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { padding: 20 },
-  title: { fontSize: 18, fontWeight: "bold", marginBottom: 20 },
-  field: { marginBottom: 15 },
-  label: { fontWeight: "bold", marginBottom: 5 },
-  value: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 10, backgroundColor: "#f9f9f9" },
+  container: { 
+    padding: 20,
+    paddingBottom: 40 
+  },
+  title: { 
+    fontSize: 20, 
+    fontWeight: "bold", 
+    marginBottom: 20,
+    textAlign: "center"
+  },
+  section: {
+    marginBottom: 25,
+    backgroundColor: "#f8f9fa",
+    padding: 15,
+    borderRadius: 10
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 15,
+    color: "#333"
+  },
+  addressSection: {
+    marginBottom: 25,
+    backgroundColor: "#e8f4fd",
+    padding: 15,
+    borderRadius: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: "#2196f3"
+  },
+  parentSection: {
+    marginBottom: 25,
+    backgroundColor: "#f0f8e8",
+    padding: 15,
+    borderRadius: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: "#4caf50"
+  },
+  field: { 
+    marginBottom: 10 
+  },
+  label: { 
+    fontWeight: "bold", 
+    marginBottom: 5,
+    color: "#555"
+  },
+  value: { 
+    borderWidth: 1, 
+    borderColor: "#ddd", 
+    borderRadius: 8, 
+    padding: 12, 
+    backgroundColor: "#fff",
+    minHeight: 40
+  },
 });
 
 export default InsertForm;
