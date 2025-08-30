@@ -2,7 +2,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert } from 'react-native';
 
-const DocumentList = ({ documents, uploads, uploadProgress, handleFileUpload, handleRemoveFile, handleShowFileModal }) => {
+const DocumentList = ({ documents, uploads, uploadProgress, handleFileUpload, handleRemoveFile, handleShowFileModal, handleDownloadDocument }) => {
   return (
     <View style={styles.documentsCard}>
       <Text style={styles.documentsTitle}>รายการเอกสารที่ต้องอัพโหลด</Text>
@@ -19,13 +19,10 @@ const DocumentList = ({ documents, uploads, uploadProgress, handleFileUpload, ha
               <Text style={styles.documentTitle}>{doc.title}</Text>
               {doc.required && <Text style={styles.requiredBadge}>*จำเป็น</Text>}
             </View>
-            {doc.downloadUrl && (
+            {/* แก้ไข: ใช้เงื่อนไขใหม่สำหรับแสดงปุ่มดาวน์โหลด */}
+            {(doc.id === 'form_101' || doc.downloadUrl) && (
               <TouchableOpacity
-                onPress={() => {
-                  Linking.openURL(doc.downloadUrl).catch(() =>
-                    Alert.alert("ไม่สามารถดาวน์โหลดไฟล์ได้")
-                  );
-                }}
+                onPress={() => handleDownloadDocument(doc.id, doc.downloadUrl)} // เรียกใช้ฟังก์ชันใหม่
                 style={styles.downloadButton}
               >
                 <Text style={styles.downloadButtonText}>⬇️</Text>
