@@ -7,11 +7,14 @@ import {
   Image,
   TouchableOpacity,
   Linking,
+  Dimensions,
 } from "react-native";
+import RenderHtml from "react-native-render-html";
 
 // props: item = object ของข่าวที่ส่งมาจาก FlatList
 const NewsContent = ({ route }) => {
   const { item } = route.params; // รับ item จาก navigation
+  const { width } = Dimensions.get("window");
 
   // ฟังก์ชันเปิดไฟล์ Document (PDF) ถ้ามี
   const openDocument = (url) => {
@@ -77,9 +80,15 @@ const NewsContent = ({ route }) => {
         </TouchableOpacity>
       ) : null}
 
-      {/* Description */}
+      {/* Description ที่รองรับ HTML */}
       {item.description ? (
-        <Text style={styles.description}>{item.description}</Text>
+        <RenderHtml
+          contentWidth={width - 30} // 30 = padding ซ้าย 15 + padding ขวา 15
+          source={{
+            html: `<div style="font-size: 16px; color: #000000ff; line-height: 22;">${item.description}</div>`,
+          }}
+          tagsStyles={htmlStyles}
+        />
       ) : null}
     </ScrollView>
   );
@@ -131,11 +140,29 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "500",
   },
-  description: {
+  // เราจะไม่ใช้ description ในส่วนนี้แล้ว แต่จะใช้ tagsStyles แทน
+});
+
+const htmlStyles = {
+  p: {
     fontSize: 16,
     color: "#000000ff",
     lineHeight: 22,
+    marginBottom: 10,
   },
-});
+  strong: {
+    fontWeight: "bold",
+  },
+  // สามารถเพิ่ม style สำหรับ tag อื่นๆ ได้ตามต้องการ เช่น
+  em: {
+    fontStyle: "italic",
+  },
+  ul: {
+    marginBottom: 10,
+  },
+  li: {
+    marginBottom: 5,
+  },
+};
 
 export default NewsContent;
