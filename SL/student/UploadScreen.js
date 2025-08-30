@@ -14,7 +14,7 @@ import UploadProgress from './components/UploadProgress';
 import DocumentList from './components/DocumentList';
 import FileDetailModal from './components/FileDetailModal';
 
-import { InsertForm101 } from './PDF/InsertForm101';
+import { InsertForm101 } from './documents/InsertForm101';
 
 const { width, height } = Dimensions.get('window');
 
