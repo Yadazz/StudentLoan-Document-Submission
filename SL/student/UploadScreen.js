@@ -14,6 +14,8 @@ import UploadProgress from './components/UploadProgress';
 import DocumentList from './components/DocumentList';
 import FileDetailModal from './components/FileDetailModal';
 
+import { InsertForm101 } from './PDF/InsertForm101';
+
 const { width, height } = Dimensions.get('window');
 
 const UploadScreen = ({ navigation, route }) => {
@@ -84,11 +86,26 @@ const UploadScreen = ({ navigation, route }) => {
     }
   };
 
+  // ฟังก์ชันใหม่สำหรับจัดการการดาวน์โหลดเอกสาร เดี๋ยวต้องมาแก้ตรงนี้ถ้าทำเอกสารเพิ่มแล้ว
+  const handleDownloadDocument = (docId, downloadUrl) => {
+    if (docId === 'form_101') {
+      // สำหรับแบบฟอร์ม กยศ.101 ให้เรียกใช้ฟังก์ชันสร้าง PDF
+      InsertForm101();
+    } else if (downloadUrl) {
+      // สำหรับเอกสารอื่นๆ ที่มีลิงก์ ให้เปิดลิงก์นั้น
+      Linking.openURL(downloadUrl).catch(() =>
+        Alert.alert("ไม่สามารถดาวน์โหลดไฟล์ได้")
+      );
+    } else {
+      Alert.alert("ไม่พบไฟล์", "ไม่สามารถดาวน์โหลดไฟล์นี้ได้ในขณะนี้");
+    }
+  };
+
   const generateDocumentsList = (data) => {
     if (!data) return [];
     let documents = [];
     documents.push(
-      { id: 'form_101', title: 'แบบฟอร์ม กยศ. 101', description: 'กรอกข้อมูลตามจริงให้ครบถ้วน', required: true, downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link' },
+      { id: 'form_101', title: 'แบบฟอร์ม กยศ. 101', description: 'กรอกข้อมูลตามจริงให้ครบถ้วน', required: true },
       { id: 'volunteer_doc', title: 'เอกสารจิตอาสา', description: 'กิจกรรมในปีการศึกษา 2567 อย่างน้อย 1 รายการ', required: true },
       { id: 'consent_student_form', title: 'หนังสือยินยอมเปิดเผยข้อมูลของผู้กู้', downloadUrl: 'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing', required: true },
       { id: 'id_copies_student', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของผู้กู้', required: true }
@@ -336,6 +353,7 @@ const UploadScreen = ({ navigation, route }) => {
         handleFileUpload={handleFileUpload}
         handleRemoveFile={handleRemoveFile}
         handleShowFileModal={handleShowFileModal}
+        handleDownloadDocument={handleDownloadDocument} 
       />
       <TouchableOpacity
         style={[styles.submitButton, stats.uploadedRequired < stats.required && styles.submitButtonDisabled]}
