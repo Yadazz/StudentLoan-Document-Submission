@@ -63,7 +63,7 @@ const HomeScreen = ({ navigation }) => {
           title: data.title || "",
           description: data.description || "",
           bannerURL: data.bannerURL || "",
-          postType: data.postType || "ทั่วไป", // เพิ่ม postType
+          postType: data.postType || "ทั่วไป",
           createdAt: data.createdAt || null,
           documentName: data.documentName || "",
           documentURL: data.documentURL || "",
@@ -71,6 +71,15 @@ const HomeScreen = ({ navigation }) => {
           ...data,
         };
       });
+
+      // เรียงจากล่าสุดไปเก่า
+      newsList.sort((a, b) => {
+        // ถ้าใช้ Firestore Timestamp
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return timeB - timeA; // มาก → น้อย = ล่าสุดก่อน
+      });
+
       setNewsData(newsList);
     } catch (error) {
       console.error("❌ Error fetching news:", error);
