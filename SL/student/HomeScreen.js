@@ -9,14 +9,11 @@ import {
   Image,
   TouchableOpacity,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { NavigationContainer } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../database/firebase";
-
-const Stack = createNativeStackNavigator();
 
 // Props
 const NewsItem = ({ item, navigation }) => {
@@ -53,13 +50,7 @@ const HomeScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
   const [refreshing, setRefreshing] = useState(false);
-
-  // ค้นหา Lowercase - แก้ไขให้ปลอดภัย
-  const filteredData = newsData.filter((item) => {
-    const title = item.title || "";
-    const search = searchText || "";
-    return String(title).toLowerCase().includes(String(search).toLowerCase());
-  });
+  const [selectedFilter, setSelectedFilter] = useState("ทั้งหมด"); // ค่า default
 
   // โหลดข้อมูลจาก Firestore
   const fetchNews = async () => {
@@ -72,6 +63,7 @@ const HomeScreen = ({ navigation }) => {
           title: data.title || "",
           description: data.description || "",
           bannerURL: data.bannerURL || "",
+          postType: data.postType || "ทั่วไป", // เพิ่ม postType
           createdAt: data.createdAt || null,
           documentName: data.documentName || "",
           documentURL: data.documentURL || "",
@@ -84,7 +76,7 @@ const HomeScreen = ({ navigation }) => {
       console.error("❌ Error fetching news:", error);
     } finally {
       setLoading(false);
-      setRefreshing(false); // ปิด refresh หลังโหลดเสร็จ
+      setRefreshing(false);
     }
   };
 
@@ -97,6 +89,27 @@ const HomeScreen = ({ navigation }) => {
     setRefreshing(true);
     fetchNews();
   };
+
+  // ฟิลเตอร์ข้อมูลตาม search + postType
+  const filteredData = newsData.filter((item) => {
+    const title = item.title || "";
+    const search = searchText || "";
+    const matchSearch = title.toLowerCase().includes(search.toLowerCase());
+
+    if (selectedFilter === "ทั้งหมด") {
+      return matchSearch;
+    }
+    return matchSearch && item.postType === selectedFilter;
+  });
+
+  // ตัวเลือก filter
+  const filters = [
+    "ทั้งหมด",
+    "ทั่วไป",
+    "ทุนการศึกษา",
+    "ชั่วโมงจิตอาสา",
+    "จ้างงาน",
+  ];
 
   return (
     <View style={styles.container}>
@@ -122,6 +135,33 @@ const HomeScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
+      {/* Filter Scroll */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
+      >
+        {filters.map((f) => (
+          <TouchableOpacity
+            key={f}
+            style={[
+              styles.filterButton,
+              selectedFilter === f && styles.filterButtonActive,
+            ]}
+            onPress={() => setSelectedFilter(f)}
+          >
+            <Text
+              style={[
+                styles.filterText,
+                selectedFilter === f && styles.filterTextActive,
+              ]}
+            >
+              {f}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
       {loading && !refreshing ? (
         <ActivityIndicator
           size="large"
@@ -135,8 +175,16 @@ const HomeScreen = ({ navigation }) => {
             <NewsItem item={item} navigation={navigation} />
           )}
           keyExtractor={(item) => item.id}
-          refreshing={refreshing} // เพิ่ม prop refreshing
-          onRefresh={handleRefresh} // เพิ่ม prop onRefresh
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          ListEmptyComponent={() => (
+            <View style={{ alignItems: "center", marginTop: 50 }}>
+              <Text style={{ fontSize: 16, color: "#777" }}>ไม่มีข้อมูล</Text>
+            </View>
+          )}
+          contentContainerStyle={
+            filteredData.length === 0 ? { flexGrow: 1 } : null
+          }
         />
       )}
 
@@ -150,15 +198,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f0f2f5",
     paddingTop: 50,
-    alignItems: "center",
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     width: "90%",
-    paddingHorizontal: 10,
-    marginBottom: 20,
+    alignSelf: "center",
+    marginBottom: 10,
   },
   searchBarContainer: {
     flexDirection: "row",
@@ -178,6 +225,38 @@ const styles = StyleSheet.create({
   searchIcon: { marginRight: 10 },
   searchInput: { flex: 1, fontSize: 16, color: "#333" },
 
+  // Filter bar
+  filterScroll: {
+    paddingVertical: 10,
+    paddingLeft: 15,
+  },
+  filterButton: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    alignItems: "center",
+    justifyContent: "center",
+    height: 40, // กำหนดความสูงคงที่
+    minWidth: 80, // กำหนดความกว้างขั้นต่ำ
+    paddingHorizontal: 15,
+  },
+  filterButtonActive: {
+    backgroundColor: "#1e90ff",
+    borderColor: "#1e90ff",
+  },
+  filterText: {
+    fontSize: 15,
+    color: "#333",
+    textAlign: "center",
+    fontWeight: "normal",
+  },
+  filterTextActive: {
+    color: "#fff",
+    fontWeight: "bold",
+  },
+
   // Card
   card: {
     backgroundColor: "#fff",
@@ -190,6 +269,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    width: "90%", // ✅ หรือจะใช้ "100%" ก็ได้
+    alignSelf: "center", // ให้การ์ดอยู่ตรงกลางแบบไม่บีบข้อความ
   },
   banner: { width: "100%", height: 180, borderRadius: 10, marginBottom: 10 },
   title: { fontSize: 20, fontWeight: "bold", color: "#222", marginBottom: 5 },
