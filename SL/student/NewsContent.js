@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Linking,
   Dimensions,
+  SafeAreaView,
 } from "react-native";
 import RenderHtml from "react-native-render-html";
 
@@ -51,46 +52,48 @@ const NewsContent = ({ route }) => {
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ padding: 15 }}
-    >
-      <View style={styles.titleContainer}>
-        <Text style={styles.title}>{item.title || "ไม่มีหัวข้อ"}</Text>
-        <Text style={styles.createdAt}>
-          {item.createdAt && item.createdAt.toDate
-            ? item.createdAt.toDate().toLocaleString("th-TH", {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })
-            : "ไม่มีวันที่"}
-        </Text>
-      </View>
+    <SafeAreaView style={styles.container}>
+      <ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={{ padding: 15 }}
+      >
+        <View style={styles.titleContainer}>
+          <Text style={styles.title}>{item.title || "ไม่มีหัวข้อ"}</Text>
+          <Text style={styles.createdAt}>
+            {item.createdAt && item.createdAt.toDate
+              ? item.createdAt.toDate().toLocaleString("th-TH", {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })
+              : "ไม่มีวันที่"}
+          </Text>
+        </View>
 
-      {/* Media */}
-      {renderMedia()}
+        {/* Media */}
+        {renderMedia()}
 
-      {/* Document / File */}
-      {item.documentURL ? (
-        <TouchableOpacity
-          onPress={() => openDocument(item.documentURL)}
-          style={styles.documentButton}
-        >
-          <Text style={styles.documentText}>เปิดเอกสาร</Text>
-        </TouchableOpacity>
-      ) : null}
+        {/* Document / File */}
+        {item.documentURL ? (
+          <TouchableOpacity
+            onPress={() => openDocument(item.documentURL)}
+            style={styles.documentButton}
+          >
+            <Text style={styles.documentText}>เปิดเอกสาร</Text>
+          </TouchableOpacity>
+        ) : null}
 
-      {/* Description ที่รองรับ HTML */}
-      {item.description ? (
-        <RenderHtml
-          contentWidth={width - 30} // 30 = padding ซ้าย 15 + padding ขวา 15
-          source={{
-            html: `<div style="font-size: 16px; color: #000000ff; line-height: 22;">${item.description}</div>`,
-          }}
-          tagsStyles={htmlStyles}
-        />
-      ) : null}
-    </ScrollView>
+        {/* Description ที่รองรับ HTML */}
+        {item.description ? (
+          <RenderHtml
+            contentWidth={width - 30} // 30 = padding ซ้าย 15 + padding ขวา 15
+            source={{
+              html: `<div style="font-size: 16px; color: #000000ff; line-height: 22;">${item.description}</div>`,
+            }}
+            tagsStyles={htmlStyles}
+          />
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -98,6 +101,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f0f2f5",
+  },
+  scrollContainer: {
+    flex: 1,
   },
   titleContainer: {
     marginBottom: 10,
