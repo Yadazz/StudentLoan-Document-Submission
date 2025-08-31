@@ -1,5 +1,4 @@
 // DocumentList.js
-import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert } from 'react-native';
 
 const DocumentList = ({ documents, uploads, uploadProgress, handleFileUpload, handleRemoveFile, handleShowFileModal, handleDownloadDocument }) => {
@@ -20,7 +19,7 @@ const DocumentList = ({ documents, uploads, uploadProgress, handleFileUpload, ha
               {doc.required && <Text style={styles.requiredBadge}>*จำเป็น</Text>}
             </View>
             {/* แก้ไข: ใช้เงื่อนไขใหม่สำหรับแสดงปุ่มดาวน์โหลด */}
-            {(doc.id === 'form_101' || doc.downloadUrl) && (
+            {(doc.id === 'form_101' || doc.id === 'consent_student_form' || doc.downloadUrl) && (
               <TouchableOpacity
                 onPress={() => handleDownloadDocument(doc.id, doc.downloadUrl)} // เรียกใช้ฟังก์ชันใหม่
                 style={styles.downloadButton}
