@@ -15,6 +15,7 @@ import DocumentList from './components/DocumentList';
 import FileDetailModal from './components/FileDetailModal';
 
 import { InsertForm101 } from './documents/InsertForm101';
+import { ConsentFrom_student } from './documents/ConsentFrom_student';
 
 const { width, height } = Dimensions.get('window');
 
@@ -91,7 +92,9 @@ const UploadScreen = ({ navigation, route }) => {
     if (docId === 'form_101') {
       // สำหรับแบบฟอร์ม กยศ.101 ให้เรียกใช้ฟังก์ชันสร้าง PDF
       InsertForm101();
-    } else if (downloadUrl) {
+    } else if (docId === 'consent_student_form') {
+      ConsentFrom_student();
+    }else if (downloadUrl) {
       // สำหรับเอกสารอื่นๆ ที่มีลิงก์ ให้เปิดลิงก์นั้น
       Linking.openURL(downloadUrl).catch(() =>
         Alert.alert("ไม่สามารถดาวน์โหลดไฟล์ได้")
