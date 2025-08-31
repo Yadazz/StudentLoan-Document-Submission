@@ -16,6 +16,9 @@ import FileDetailModal from './components/FileDetailModal';
 
 import { InsertForm101 } from './documents/InsertForm101';
 import { ConsentFrom_student } from './documents/ConsentFrom_student';
+import { ConsentFrom_father } from './documents/ConsentFrom_father';
+import { ConsentFrom_mother } from './documents/ConsentFrom_mother';
+import { ConsentFrom_guardian } from './documents/ConsentFrom_guardian';
 
 const { width, height } = Dimensions.get('window');
 
@@ -94,7 +97,13 @@ const UploadScreen = ({ navigation, route }) => {
       InsertForm101();
     } else if (docId === 'consent_student_form') {
       ConsentFrom_student();
-    }else if (downloadUrl) {
+    } else if (docId === 'consent_father_form') {
+      ConsentFrom_father();
+    } else if (docId === 'consent_mother_form') {
+      ConsentFrom_mother();
+    } else if (docId === 'guardian_consent') {
+      ConsentFrom_guardian();
+    } else if (downloadUrl) {
       // สำหรับเอกสารอื่นๆ ที่มีลิงก์ ให้เปิดลิงก์นั้น
       Linking.openURL(downloadUrl).catch(() =>
         Alert.alert("ไม่สามารถดาวน์โหลดไฟล์ได้")
@@ -110,14 +119,14 @@ const UploadScreen = ({ navigation, route }) => {
     documents.push(
       { id: 'form_101', title: 'แบบฟอร์ม กยศ. 101', description: 'กรอกข้อมูลตามจริงให้ครบถ้วน', required: true },
       { id: 'volunteer_doc', title: 'เอกสารจิตอาสา', description: 'กิจกรรมในปีการศึกษา 2567 อย่างน้อย 1 รายการ', required: true },
-      { id: 'consent_student_form', title: 'หนังสือยินยอมเปิดเผยข้อมูลของผู้กู้', downloadUrl: 'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing', required: true },
+      { id: 'consent_student_form', title: 'หนังสือยินยอมเปิดเผยข้อมูลของผู้กู้', required: true },
       { id: 'id_copies_student', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของผู้กู้', required: true }
     );
     if (data.familyStatus === "ก") {
       documents.push(
-        { id: 'consent_fahter_form', title: 'หนังสือยินยอมเปิดเผยข้อมูลของบิดา', downloadUrl: 'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing', required: true },
+        { id: 'consent_father_form', title: 'หนังสือยินยอมเปิดเผยข้อมูลของบิดา', required: true },
         { id: 'id_copies_father', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของบิดา', required: true },
-        { id: 'consent_mother_form', title: 'หนังสือยินยอมเปิดเผยข้อมูลของมารดา', downloadUrl: 'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing', required: true },
+        { id: 'consent_mother_form', title: 'หนังสือยินยอมเปิดเผยข้อมูลของมารดา', required: true },
         { id: 'id_copies_mother', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของมารดา', required: true },
       );
       if (data.fatherIncome === "มี") {
@@ -138,9 +147,11 @@ const UploadScreen = ({ navigation, route }) => {
       }
     } else if (data.familyStatus === "ข") {
       let parent = data.livingWith === "บิดา" ? "บิดา" : "มารดา";
+      let consentFormId = data.livingWith === "บิดา" ? 'consent_father_form' : 'consent_mother_form'; // เลือกไฟล์ตามที่อยู่กับพ่อหรือแม่
+      
       documents.push(
-        { id: 'consent_form_single_parent', title: `หนังสือยินยอมเปิดเผยข้อมูลของ ${parent}`, downloadUrl: 'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing', required: true },
-        { id: 'id_copies_single_parent', title: `สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของ ${parent}`, required: true }
+        { id: consentFormId, title: `หนังสือยินยอมเปิดเผยข้อมูลของ ${parent}`, required: true },
+        { id: `id_copies_${consentFormId}`, title: `สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของ ${parent}`, required: true }
       );
       if (data.legalStatus === "มี") {
         documents.push({ id: 'legal_status', title: 'สำเนาใบหย่า (กรณีหย่าร้าง) หรือ สำเนาใบมรณบัตร (กรณีเสียชีวิต)', required: true });
@@ -161,7 +172,7 @@ const UploadScreen = ({ navigation, route }) => {
       }
     } else if (data.familyStatus === "ค") {
       documents.push(
-        { id: 'guardian_consent', title: 'หนังสือยินยอมเปิดเผยข้อมูล ของผู้ปกครอง', downloadUrl: 'https://drive.google.com/file/d/1ZpgUsagMjrxvyno7Jwu1LO3r9Y82GAv4/view?usp=sharing', required: true },
+        { id: 'guardian_consent', title: 'หนังสือยินยอมเปิดเผยข้อมูล ของผู้ปกครอง', required: true },
         { id: 'guardian_id_copies', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้อง ของผู้ปกครอง', required: true }
       );
       if (data.guardianIncome === "มี") {
