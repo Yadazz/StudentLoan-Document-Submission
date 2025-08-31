@@ -15,6 +15,18 @@ if (Platform.OS !== "web") {
   rgb = pdfLib.rgb;
   fontkit = require("@pdf-lib/fontkit");
 }
+function drawCitizenId(pdfPage, citizenId, font, startX, startY, stepX) {
+  if (!citizenId) return;
+  const digits = citizenId.split("");
+  digits.forEach((digit, index) => {
+    pdfPage.drawText(digit, {
+      x: startX + index * stepX, // เลื่อนตามช่อง
+      y: startY,
+      size: 12,
+      font: font
+    });
+  });
+}
 
 // ฟังก์ชันสร้าง PDF (แยกออกมาเพื่อให้โค้ดหลักสะอาดขึ้น)
 async function fillPdf(userData, existingPdfBytes, fontBytes) {
@@ -26,9 +38,10 @@ async function fillPdf(userData, existingPdfBytes, fontBytes) {
   const pdfDoc = await PDFDocument.load(existingPdfBytes);
   pdfDoc.registerFontkit(fontkit);
   const customFont = await pdfDoc.embedFont(fontBytes);
+  const pages = pdfDoc.getPages();
   const firstPage = pages[0];
-const secondPage = pages[1];
-const threePage = pages[2];
+  const secondPage = pages[1];
+  const threePage = pages[2];;
 
 
   // ข้อมูลส่วนตัว
@@ -39,6 +52,7 @@ const threePage = pages[2];
   firstPage.drawText(userData.birthdate || "-", { x: 139.68, y: 573.12, size: 12, font: customFont });
   firstPage.drawText(userData.school || "-", { x: 159.12, y: 503.28, size: 12, font: customFont });
   firstPage.drawText(userData.student_id || "-", { x: 170.56, y: 433.44, size: 12, font: customFont });
+  
 
   // ข้อมูลที่อยู่ปัจจุบัน (address_current)
   if (userData.address_current) {
