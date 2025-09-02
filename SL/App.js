@@ -7,7 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./database/firebase";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // นำเข้าคอมโพเนนต์หน้าต่างๆ ที่เราสร้างไว้
 import HomeScreen from "./student/HomeScreen";
@@ -19,6 +19,7 @@ import ProfileScreen from "./student/ProfileScreen";
 import LoginScreen from "./LoginScreen";
 import SignUpScreen from "./SignUpScreen";
 import InsertForm from "./student/InsertForm";
+import OCR from "./model/EasyOcr/OCR";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -33,18 +34,14 @@ const LoadingScreen = () => (
 
 // สร้าง Stack Navigator สำหรับแต่ละ Tab
 const HomeStack = () => (
-  <Stack.Navigator
-    screenOptions={{ headerShown: false }}
-  >
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="HomeMain" component={HomeScreen} />
     <Stack.Screen name="NewsContent" component={NewsContent} />
   </Stack.Navigator>
 );
 
 const UploadStack = () => (
-  <Stack.Navigator
-    screenOptions={{ headerShown: false }}
-  >
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="UploadMain" component={UploadScreen} />
     {/* ถ้าในอนาคตมีหน้าย่อยในแท็บอัพโหลด สามารถเพิ่มที่นี่ได้ */}
   </Stack.Navigator>
@@ -70,6 +67,7 @@ const MainTabs = () => (
         else if (route.name === "ส่งเอกสาร") iconName = "document-text-outline";
         else if (route.name === "ตั้งค่า") iconName = "settings-outline";
         else if (route.name === "กรอกเอกสาร") iconName = "create-outline";
+        else if (route.name === "OCR") iconName = "eye-outline";
         return <Ionicons name={iconName} size={size} color={color} />;
       },
     })}
@@ -78,6 +76,7 @@ const MainTabs = () => (
     <Tab.Screen name="ส่งเอกสาร" component={UploadStack} />
     <Tab.Screen name="ตั้งค่า" component={SettingsScreen} />
     <Tab.Screen name="กรอกเอกสาร" component={InsertForm} />
+    <Tab.Screen name="OCR" component={OCR} />
   </Tab.Navigator>
 );
 
@@ -88,47 +87,50 @@ const App = () => {
   useEffect(() => {
     const checkStoredAuth = async () => {
       try {
-        const storedUser = await AsyncStorage.getItem('userToken');
+        const storedUser = await AsyncStorage.getItem("userToken");
         if (storedUser) {
-          console.log('Found stored user token');
+          console.log("Found stored user token");
           setIsAuthenticated(true);
         }
       } catch (error) {
-        console.log('Error checking stored auth:', error);
+        console.log("Error checking stored auth:", error);
       }
     };
     checkStoredAuth();
     let authTimeout;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log('Auth state changed:', user ? `User: ${user.uid}` : 'No user');
+      console.log(
+        "Auth state changed:",
+        user ? `User: ${user.uid}` : "No user"
+      );
       if (user) {
-        const userEmail = user.email || ''; 
+        const userEmail = user.email || "";
         if (userEmail) {
-          const formattedEmail = userEmail.toLowerCase(); 
+          const formattedEmail = userEmail.toLowerCase();
         } else {
-          console.log('Email ไม่พบ');
+          console.log("Email ไม่พบ");
         }
         try {
-          await AsyncStorage.setItem('userToken', user.uid);
-          await AsyncStorage.setItem('userEmail', userEmail);
-          console.log('User data saved to AsyncStorage');
+          await AsyncStorage.setItem("userToken", user.uid);
+          await AsyncStorage.setItem("userEmail", userEmail);
+          console.log("User data saved to AsyncStorage");
         } catch (error) {
-          console.log('Error saving to AsyncStorage:', error);
+          console.log("Error saving to AsyncStorage:", error);
         }
         setIsAuthenticated(true);
       } else {
         try {
-          await AsyncStorage.multiRemove(['userToken', 'userEmail']);
-          console.log('User data removed from AsyncStorage');
+          await AsyncStorage.multiRemove(["userToken", "userEmail"]);
+          console.log("User data removed from AsyncStorage");
         } catch (error) {
-          console.log('Error removing from AsyncStorage:', error);
+          console.log("Error removing from AsyncStorage:", error);
         }
         setIsAuthenticated(false);
       }
       setIsLoading(false);
     });
     authTimeout = setTimeout(() => {
-      console.log('Auth timeout - setting loading to false');
+      console.log("Auth timeout - setting loading to false");
       setIsLoading(false);
       checkStoredAuth().then(() => {
         if (isAuthenticated === null) {
@@ -162,8 +164,16 @@ const App = () => {
           <Stack.Screen name="LoginScreen" component={LoginScreen} />
           <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
           <Stack.Screen name="MainTabs" component={MainTabs} />
-          <Stack.Screen name="Document Reccommend" component={DocRecScreen} options={{ headerShown: true }} />
-          <Stack.Screen name="ProfileScreen" component={ProfileScreen} options={{ title: "โปรไฟล์", headerShown: true }} />
+          <Stack.Screen
+            name="Document Reccommend"
+            component={DocRecScreen}
+            options={{ headerShown: true }}
+          />
+          <Stack.Screen
+            name="ProfileScreen"
+            component={ProfileScreen}
+            options={{ title: "โปรไฟล์", headerShown: true }}
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
@@ -173,14 +183,14 @@ const App = () => {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f0f2f5',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f0f2f5",
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    color: "#666",
   },
 });
 
