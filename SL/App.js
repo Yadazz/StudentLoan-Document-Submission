@@ -20,6 +20,7 @@ import LoginScreen from "./LoginScreen";
 import SignUpScreen from "./SignUpScreen";
 import InsertForm from "./student/InsertForm";
 import OCR from "./model/EasyOcr/OCR";
+import DocumentStatusScreen from "./student/DocumentStatusScreen"; // เพิ่มการ import
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -115,8 +116,32 @@ const App = () => {
           <Stack.Screen name="LoginScreen" component={LoginScreen} />
           <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
           <Stack.Screen name="MainTabs" component={MainTabs} />
-          <Stack.Screen name="Document Reccommend" component={DocRecScreen} options={{ headerShown: true }} />
-          <Stack.Screen name="ProfileScreen" component={ProfileScreen} options={{ title: "โปรไฟล์", headerShown: true }} />
+          <Stack.Screen 
+            name="Document Reccommend" 
+            component={DocRecScreen} 
+            options={{ headerShown: true }} 
+          />
+          <Stack.Screen 
+            name="ProfileScreen" 
+            component={ProfileScreen} 
+            options={{ title: "โปรไฟล์", headerShown: true }} 
+          />
+          {/* เพิ่มหน้า DocumentStatusScreen */}
+          <Stack.Screen 
+            name="DocumentStatusScreen" 
+            component={DocumentStatusScreen} 
+            options={{ 
+              title: "สถานะเอกสาร", 
+              headerShown: true,
+              headerStyle: {
+                backgroundColor: '#2563eb',
+              },
+              headerTintColor: '#ffffff',
+              headerTitleStyle: {
+                fontWeight: 'bold',
+              },
+            }} 
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
