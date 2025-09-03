@@ -5,7 +5,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { db, auth } from '../database/firebase';
-import { doc, getDocs, collection, query, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, deleteDoc } from 'firebase/firestore';
 
 // Import refactored components
 import NoSurveyCard from './components/NoSurveyCard';
@@ -19,6 +19,7 @@ import { ConsentFrom_student } from './documents/ConsentFrom_student';
 import { ConsentFrom_father } from './documents/ConsentFrom_father';
 import { ConsentFrom_mother } from './documents/ConsentFrom_mother';
 import { ConsentFrom_guardian } from './documents/ConsentFrom_guardian';
+import { GuardianIncome102 } from './documents/guardian_income102';
 
 const { width, height } = Dimensions.get('window');
 
@@ -42,6 +43,7 @@ const UploadScreen = ({ navigation, route }) => {
       try {
         setIsLoading(true);
         const currentUser = auth.currentUser;
+
         if (!currentUser) {
           console.log("No user logged in, cannot fetch survey data.");
           setSurveyData(null);
@@ -49,15 +51,17 @@ const UploadScreen = ({ navigation, route }) => {
           return;
         }
 
-        const surveyCollectionRef = collection(db, 'users', currentUser.uid, 'survey');
-        const q = query(surveyCollectionRef);
-        const querySnapshot = await getDocs(q);
+        // เรียกข้อมูล Survey ของผู้ใช้จาก Firestore
+        const userSurveyRef = doc(db, 'users', currentUser.uid); // เรียก document ของผู้ใช้
+        const userSurveyDoc = await getDoc(userSurveyRef); // ตรวจสอบว่า document นี้มีอยู่หรือไม่
 
-        if (!querySnapshot.empty) {
-          const docSnap = querySnapshot.docs[0];
-          console.log("Survey data fetched:", docSnap.data());
-          setSurveyData(docSnap.data());
-          setSurveyDocId(docSnap.id);
+        if (userSurveyDoc.exists()) {
+          // ถ้ามีเอกสาร
+          const userData = userSurveyDoc.data(); // ดึงข้อมูลทั้งหมดจาก document ของผู้ใช้
+          const surveyData = userData.survey; // เข้าถึงฟิลด์ survey
+          setSurveyData(surveyData);
+          setSurveyDocId(userSurveyDoc.id);
+          console.log("Survey data fetched:", surveyData);
         } else {
           console.log("No survey data found for this user.");
           setSurveyData(null);
@@ -71,24 +75,27 @@ const UploadScreen = ({ navigation, route }) => {
         setIsLoading(false);
       }
     };
+
     fetchSurveyData();
   }, []);
 
   const deleteSurveyData = async () => {
-    const currentUser = auth.currentUser;
-    if (!currentUser || !surveyDocId) {
-      console.log("No user or survey data to delete.");
-      return;
-    }
-    try {
-      const surveyDocRef = doc(db, 'users', currentUser.uid, 'survey', surveyDocId);
-      await deleteDoc(surveyDocRef);
-      console.log("Survey data successfully deleted from Firestore!");
-    } catch (error) {
-      console.error("Error deleting survey data: ", error);
-      Alert.alert("Error", "Failed to delete old survey data.");
-    }
-  };
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log("No user to delete survey data.");
+    return;
+  }
+  try {
+    const userSurveyRef = doc(db, 'users', currentUser.uid); // เรียก document ของผู้ใช้
+    await updateDoc(userSurveyRef, {
+      survey: {} // ลบข้อมูลในฟิลด์ survey โดยการตั้งให้เป็น object ว่าง
+    });
+    console.log("Survey data successfully deleted from Firestore!");
+  } catch (error) {
+    console.error("Error deleting survey data: ", error);
+    Alert.alert("Error", "Failed to delete survey data.");
+  }
+};
 
   // ฟังก์ชันใหม่สำหรับจัดการการดาวน์โหลดเอกสาร เดี๋ยวต้องมาแก้ตรงนี้ถ้าทำเอกสารเพิ่มแล้ว
   const handleDownloadDocument = (docId, downloadUrl) => {
@@ -103,7 +110,9 @@ const UploadScreen = ({ navigation, route }) => {
       ConsentFrom_mother();
     } else if (docId === 'guardian_consent') {
       ConsentFrom_guardian();
-    } else if (downloadUrl) {
+    } else if (docId === 'guardian_income_cert'){
+      GuardianIncome102();
+    }else if (downloadUrl) {
       // สำหรับเอกสารอื่นๆ ที่มีลิงก์ ให้เปิดลิงก์นั้น
       Linking.openURL(downloadUrl).catch(() =>
         Alert.alert("ไม่สามารถดาวน์โหลดไฟล์ได้")
@@ -129,15 +138,15 @@ const UploadScreen = ({ navigation, route }) => {
         { id: 'consent_mother_form', title: 'หนังสือยินยอมเปิดเผยข้อมูลของมารดา', required: true },
         { id: 'id_copies_mother', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของมารดา', required: true },
       );
-      if (data.fatherIncome === "มี") {
-        documents.push({ id: 'father_income', title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของบิดา', description: '(เอกสารอายุไม่เกิน 3 เดือน)', required: true });
+      if (data.fatherIncome === "มีรายได้ประจำ") {
+        documents.push({ id: 'father_income', title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของบิดา', description: 'เอกสารอายุไม่เกิน 3 เดือน', required: true });
       } else {
         documents.push(
           { id: 'father_income_cert', title: 'หนังสือรับรองรายได้ กยศ. 102 ของบิดา', downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link', required: true },
           { id: 'fa_id_copies_gov', title: 'สำเนาบัตรข้าราชการผู้รับรอง', description: 'สำหรับรับรองรายได้ เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น', required: true }
         );
       }
-      if (data.motherIncome === "มี") {
+      if (data.motherIncome === "มีรายได้ประจำ") {
         documents.push({ id: 'mother_income', title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของมารดา', description: 'เอกสารอายุไม่เกิน 3 เดือน', required: true });
       } else {
         documents.push(
@@ -153,7 +162,7 @@ const UploadScreen = ({ navigation, route }) => {
         { id: consentFormId, title: `หนังสือยินยอมเปิดเผยข้อมูลของ ${parent}`, required: true },
         { id: `id_copies_${consentFormId}`, title: `สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของ ${parent}`, required: true }
       );
-      if (data.legalStatus === "มี") {
+      if (data.legalStatus === "มีเอกสาร") {
         documents.push({ id: 'legal_status', title: 'สำเนาใบหย่า (กรณีหย่าร้าง) หรือ สำเนาใบมรณบัตร (กรณีเสียชีวิต)', required: true });
       } else {
         documents.push(
@@ -175,7 +184,7 @@ const UploadScreen = ({ navigation, route }) => {
         { id: 'guardian_consent', title: 'หนังสือยินยอมเปิดเผยข้อมูล ของผู้ปกครอง', required: true },
         { id: 'guardian_id_copies', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้อง ของผู้ปกครอง', required: true }
       );
-      if (data.guardianIncome === "มี") {
+      if (data.guardianIncome === "มีรายได้ประจำ") {
         documents.push({ id: 'guardian_income', title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของผู้ปกครอง', description: '(เอกสารอายุไม่เกิน 3 เดือน)', required: true });
       } else {
         documents.push(
@@ -183,7 +192,7 @@ const UploadScreen = ({ navigation, route }) => {
           { id: 'guar_id_copies_gov', title: 'สำเนาบัตรข้าราชการผู้รับรอง', description: 'สำหรับรับรองรายได้ เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น', required: true }
         );
       }
-      if (data.parentLegalStatus === "มี") {
+      if (data.parentLegalStatus === "มีเอกสาร") {
         documents.push({ id: 'parent_legal_status', title: 'สำเนาใบหย่า (กรณีหย่าร้าง) หรือ สำเนาใบมรณบัตร (กรณีเสียชีวิต)', description: '', required: true });
       }
       documents.push(
