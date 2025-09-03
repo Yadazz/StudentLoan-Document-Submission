@@ -7,7 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./database/firebase";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // นำเข้าคอมโพเนนต์หน้าต่างๆ ที่เราสร้างไว้
 import HomeScreen from "./student/HomeScreen";
@@ -43,7 +43,6 @@ const HomeStack = () => (
 const UploadStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="UploadMain" component={UploadScreen} />
-    {/* ถ้าในอนาคตมีหน้าย่อยในแท็บอัพโหลด สามารถเพิ่มที่นี่ได้ */}
   </Stack.Navigator>
 );
 
@@ -53,14 +52,8 @@ const MainTabs = () => (
       headerShown: false,
       tabBarActiveTintColor: "#007AFF",
       tabBarInactiveTintColor: "gray",
-      tabBarStyle: {
-        paddingVertical: 5,
-        height: 70,
-      },
-      tabBarLabelStyle: {
-        fontSize: 12,
-        marginBottom: 5,
-      },
+      tabBarStyle: { paddingVertical: 5, height: 70 },
+      tabBarLabelStyle: { fontSize: 12, marginBottom: 5 },
       tabBarIcon: ({ color, size }) => {
         let iconName;
         if (route.name === "หน้าหลัก") iconName = "home-outline";
@@ -81,70 +74,27 @@ const MainTabs = () => (
 );
 
 const App = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const checkStoredAuth = async () => {
-      try {
-        const storedUser = await AsyncStorage.getItem("userToken");
-        if (storedUser) {
-          console.log("Found stored user token");
-          setIsAuthenticated(true);
-        }
-      } catch (error) {
-        console.log("Error checking stored auth:", error);
-      }
-    };
-    checkStoredAuth();
-    let authTimeout;
+    // onAuthStateChanged จะทำงานเมื่อสถานะการล็อกอินเปลี่ยนแปลง
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log(
-        "Auth state changed:",
-        user ? `User: ${user.uid}` : "No user"
-      );
+      console.log('Auth state changed:', user ? 'User logged in' : 'User logged out');
       if (user) {
-        const userEmail = user.email || "";
-        if (userEmail) {
-          const formattedEmail = userEmail.toLowerCase();
-        } else {
-          console.log("Email ไม่พบ");
-        }
-        try {
-          await AsyncStorage.setItem("userToken", user.uid);
-          await AsyncStorage.setItem("userEmail", userEmail);
-          console.log("User data saved to AsyncStorage");
-        } catch (error) {
-          console.log("Error saving to AsyncStorage:", error);
-        }
+        // หากผู้ใช้ล็อกอินอยู่
         setIsAuthenticated(true);
       } else {
-        try {
-          await AsyncStorage.multiRemove(["userToken", "userEmail"]);
-          console.log("User data removed from AsyncStorage");
-        } catch (error) {
-          console.log("Error removing from AsyncStorage:", error);
-        }
+        // หากผู้ใช้ออกจากระบบ
         setIsAuthenticated(false);
       }
-      setIsLoading(false);
+      setIsLoading(false); // เสร็จสิ้นการตรวจสอบ
     });
-    authTimeout = setTimeout(() => {
-      console.log("Auth timeout - setting loading to false");
-      setIsLoading(false);
-      checkStoredAuth().then(() => {
-        if (isAuthenticated === null) {
-          setIsAuthenticated(false);
-        }
-      });
-    }, 5000);
-    return () => {
-      unsubscribe();
-      if (authTimeout) {
-        clearTimeout(authTimeout);
-      }
-    };
-  }, []);
+
+    // คืนค่าฟังก์ชัน unsubscribe เพื่อยกเลิกการติดตามเมื่อคอมโพเนนต์ถูก unmount
+    return () => unsubscribe();
+  }, []); // [] ทำให้ useEffect ทำงานแค่ครั้งแรกที่คอมโพเนนต์ถูก mount
+
   if (isLoading) {
     return (
       <SafeAreaProvider>
@@ -152,6 +102,7 @@ const App = () => {
       </SafeAreaProvider>
     );
   }
+
   return (
     <SafeAreaProvider>
       <NavigationContainer>
@@ -164,16 +115,8 @@ const App = () => {
           <Stack.Screen name="LoginScreen" component={LoginScreen} />
           <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
           <Stack.Screen name="MainTabs" component={MainTabs} />
-          <Stack.Screen
-            name="Document Reccommend"
-            component={DocRecScreen}
-            options={{ headerShown: true }}
-          />
-          <Stack.Screen
-            name="ProfileScreen"
-            component={ProfileScreen}
-            options={{ title: "โปรไฟล์", headerShown: true }}
-          />
+          <Stack.Screen name="Document Reccommend" component={DocRecScreen} options={{ headerShown: true }} />
+          <Stack.Screen name="ProfileScreen" component={ProfileScreen} options={{ title: "โปรไฟล์", headerShown: true }} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
@@ -183,14 +126,14 @@ const App = () => {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f0f2f5",
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f2f5',
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: "#666",
+    color: '#666',
   },
 });
 
