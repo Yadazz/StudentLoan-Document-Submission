@@ -6,7 +6,8 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { db, auth } from '../database/firebase';
-import { doc, collection, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+
 
 // Import Components
 import QuestionOption from './components/QuestionOption';
@@ -66,7 +67,7 @@ const DocRecScreen = () => {
             question: "2. บิดามีรายได้ประจำหรือไม่?",
             options: [
               { value: 'มีรายได้ประจำ', label: 'มีรายได้ประจำ' },
-              { value: 'ไม่มีรายได้ประจำ', label: 'ไม่มีรายได้ประจำ' }
+              { value: 'มีรายได้ไม่ประจำ', label: 'มีรายได้ไม่ประจำ' }
             ],
             selectedValue: fatherIncome,
             onSelect: setFatherIncome
@@ -91,7 +92,7 @@ const DocRecScreen = () => {
             question: "2. ผู้ปกครองมีรายได้ประจำหรือไม่?",
             options: [
               { value: 'มีรายได้ประจำ', label: 'มีรายได้ประจำ' },
-              { value: 'ไม่มีรายได้ประจำ', label: 'ไม่มีรายได้ประจำ' }
+              { value: 'มีรายได้ไม่ประจำ', label: 'มีรายได้ไม่ประจำ' }
             ],
             selectedValue: guardianIncome,
             onSelect: setGuardianIncome
@@ -105,7 +106,7 @@ const DocRecScreen = () => {
             question: "3. มารดามีรายได้ประจำหรือไม่?",
             options: [
               { value: 'มีรายได้ประจำ', label: 'มีรายได้ประจำ' },
-              { value: 'ไม่มีรายได้ประจำ', label: 'ไม่มีรายได้ประจำ' }
+              { value: 'มีรายได้ไม่ประจำ', label: 'มีรายได้ไม่ประจำ' }
             ],
             selectedValue: motherIncome,
             onSelect: setMotherIncome
@@ -114,8 +115,8 @@ const DocRecScreen = () => {
           return {
             question: "3. คุณมีสำเนาใบหย่า หรือ สำเนาใบมรณบัตรหรือไม่?",
             options: [
-              { value: 'มี', label: 'มี' },
-              { value: 'ไม่มี', label: 'ไม่มี' }
+              { value: 'มีเอกสาร', label: 'มีเอกสาร' },
+              { value: 'ไม่มีเอกสาร', label: 'ไม่มีเอกสาร' }
             ],
             selectedValue: legalStatus,
             onSelect: setLegalStatus
@@ -124,8 +125,8 @@ const DocRecScreen = () => {
           return {
             question: "3. คุณมีสำเนาใบหย่า หรือ สำเนาใบมรณบัตรของบิดามารดาหรือไม่?",
             options: [
-              { value: 'มี', label: 'มี' },
-              { value: 'ไม่มี', label: 'ไม่มี' }
+              { value: 'มีเอกสาร', label: 'มีเอกสาร' },
+              { value: 'ไม่มีเอกสาร', label: 'ไม่มีเอกสาร' }
             ],
             selectedValue: parentLegalStatus,
             onSelect: setParentLegalStatus
@@ -143,7 +144,7 @@ const DocRecScreen = () => {
             question: `4. ${parent} มีรายได้ประจำหรือไม่?`,
             options: [
               { value: 'มีรายได้ประจำ', label: 'มีรายได้ประจำ' },
-              { value: 'ไม่มีรายได้ประจำ', label: 'ไม่มีรายได้ประจำ' }
+              { value: 'มีรายได้ไม่ประจำ', label: 'มีรายได้ไม่ประจำ' }
             ],
             selectedValue: income,
             onSelect: setIncome
@@ -180,28 +181,42 @@ const DocRecScreen = () => {
   };
 
   const handleUploadAndSave = async () => {
-    try {
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        Alert.alert("Error", "User not logged in.");
-        return;
-      }
-
-      const surveyData = {
-        ...getSurveyData(),
-        timestamp: serverTimestamp()
-      };
-
-      const surveyRef = doc(collection(db, "users", currentUser.uid, "survey"));
-      await setDoc(surveyRef, surveyData);
-
-      navigation.navigate('MainTabs', { screen: 'ส่งเอกสาร' });
-
-    } catch (error) {
-      console.error("Error saving survey data: ", error);
-      Alert.alert("Error", "Failed to save survey data.");
+  try {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      Alert.alert("Error", "User not logged in.");
+      return;
     }
-  };
+
+    const surveyData = {
+      ...getSurveyData(),
+      timestamp: serverTimestamp()
+    };
+
+    // เช็คว่าผู้ใช้มีเอกสารใน Firestore หรือยัง
+    const userRef = doc(db, "users", currentUser.uid);
+    const userDoc = await getDoc(userRef);
+
+    if (userDoc.exists()) {
+      // ถ้ามีเอกสารของผู้ใช้, อัพเดตข้อมูล survey
+      await updateDoc(userRef, {
+        survey: surveyData
+      });
+    } else {
+      // ถ้าเอกสารยังไม่มี, สร้างเอกสารใหม่และเก็บข้อมูล survey
+      await setDoc(userRef, {
+        survey: surveyData
+      });
+    }
+
+    // นำทางไปยังหน้าต่อไป
+    navigation.navigate('MainTabs', { screen: 'ส่งเอกสาร' });
+
+  } catch (error) {
+    console.error("Error saving survey data: ", error);
+    Alert.alert("Error", "Failed to save survey data.");
+  }
+};
 
   // Render เนื้อหา
   const renderContent = () => {
