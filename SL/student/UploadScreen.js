@@ -1,4 +1,4 @@
-// UploadScreen.js (Main Component)
+// UploadScreen.js (Main Component) - Updated
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Platform, Dimensions, Image, ActivityIndicator } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
@@ -36,6 +36,7 @@ const UploadScreen = ({ navigation, route }) => {
   const [contentType, setContentType] = useState('');
   const [imageZoom, setImageZoom] = useState(1);
   const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
+  const [isSubmitting, setIsSubmitting] = useState(false); // เพิ่ม state สำหรับการส่งข้อมูล
 
   useEffect(() => {
     const fetchSurveyData = async () => {
@@ -60,6 +61,12 @@ const UploadScreen = ({ navigation, route }) => {
           const surveyData = userData.survey; // เข้าถึงฟิลด์ survey
           setSurveyData(surveyData);
           setSurveyDocId(userSurveyDoc.id);
+          
+          // โหลดข้อมูล uploads ที่มีอยู่ถ้ามี
+          if (userData.uploads) {
+            setUploads(userData.uploads);
+          }
+          
           console.log("Survey data fetched:", surveyData);
         } else {
           console.log("No survey data found for this user.");
@@ -78,23 +85,40 @@ const UploadScreen = ({ navigation, route }) => {
     fetchSurveyData();
   }, []);
 
+  // ฟังก์ชันสำหรับบันทึก uploads ไป Firebase
+  const saveUploadsToFirebase = async (uploadsData) => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+
+      const userRef = doc(db, 'users', currentUser.uid);
+      await updateDoc(userRef, {
+        uploads: uploadsData,
+        lastUpdated: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error saving uploads to Firebase:", error);
+    }
+  };
+
   const deleteSurveyData = async () => {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    console.log("No user to delete survey data.");
-    return;
-  }
-  try {
-    const userSurveyRef = doc(db, 'users', currentUser.uid); // เรียก document ของผู้ใช้
-    await updateDoc(userSurveyRef, {
-      survey: {} // ลบข้อมูลในฟิลด์ survey โดยการตั้งให้เป็น object ว่าง
-    });
-    console.log("Survey data successfully deleted from Firestore!");
-  } catch (error) {
-    console.error("Error deleting survey data: ", error);
-    Alert.alert("Error", "Failed to delete survey data.");
-  }
-};
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      console.log("No user to delete survey data.");
+      return;
+    }
+    try {
+      const userSurveyRef = doc(db, 'users', currentUser.uid); // เรียก document ของผู้ใช้
+      await updateDoc(userSurveyRef, {
+        survey: {}, // ลบข้อมูลในฟิลด์ survey โดยการตั้งให้เป็น object ว่าง
+        uploads: {} // ลบข้อมูล uploads ด้วย
+      });
+      console.log("Survey data successfully deleted from Firestore!");
+    } catch (error) {
+      console.error("Error deleting survey data: ", error);
+      Alert.alert("Error", "Failed to delete survey data.");
+    }
+  };
 
   // ฟังก์ชันใหม่สำหรับจัดการการดาวน์โหลดเอกสาร เดี๋ยวต้องมาแก้ตรงนี้ถ้าทำเอกสารเพิ่มแล้ว
   const handleDownloadDocument = (docId, downloadUrl) => {
@@ -109,7 +133,7 @@ const UploadScreen = ({ navigation, route }) => {
       ConsentFrom_mother();
     } else if (docId === 'guardian_income_cert' || docId === 'father_income_cert' || docId === 'mother_income_cert' || docId === 'single_parent_income_cert' || docId === 'famo_income_cert') {
       Income102();
-    }else if (downloadUrl) {
+    } else if (downloadUrl) {
       // สำหรับเอกสารอื่นๆ ที่มีลิงก์ ให้เปิดลิงก์นั้น
       Linking.openURL(downloadUrl).catch(() =>
         Alert.alert("ไม่สามารถดาวน์โหลดไฟล์ได้")
@@ -300,29 +324,121 @@ const UploadScreen = ({ navigation, route }) => {
       });
       if (result.canceled) return;
       const file = result.assets[0];
-      setUploads((prev) => ({
-        ...prev,
-        [docId]: { filename: file.name, uri: file.uri, mimeType: file.mimeType, size: file.size, uploadDate: new Date().toLocaleString("th-TH"), status: "completed", },
-      }));
+      
+      const newUploads = {
+        ...uploads,
+        [docId]: { 
+          filename: file.name, 
+          uri: file.uri, 
+          mimeType: file.mimeType, 
+          size: file.size, 
+          uploadDate: new Date().toLocaleString("th-TH"), 
+          status: "pending", // เพิ่ม status เริ่มต้น
+        }
+      };
+      
+      setUploads(newUploads);
+      
+      // บันทึกลง Firebase
+      await saveUploadsToFirebase(newUploads);
+      
     } catch (error) {
       Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถเลือกไฟล์ได้");
       console.error(error);
     }
   };
 
-  const handleRemoveFile = (docId) => {
-    Alert.alert("ลบไฟล์", "คุณต้องการลบไฟล์นี้หรือไม่?", [{ text: "ยกเลิก", style: "cancel" }, { text: "ลบ", style: "destructive", onPress: () => { setUploads(prev => { const newUploads = { ...prev }; delete newUploads[docId]; return newUploads; }); handleCloseModal(); } }]);
+  const handleRemoveFile = async (docId) => {
+    Alert.alert("ลบไฟล์", "คุณต้องการลบไฟล์นี้หรือไม่?", [
+      { text: "ยกเลิก", style: "cancel" }, 
+      { text: "ลบ", style: "destructive", onPress: async () => { 
+        const newUploads = { ...uploads };
+        delete newUploads[docId];
+        setUploads(newUploads);
+        
+        // อัพเดทใน Firebase
+        await saveUploadsToFirebase(newUploads);
+        
+        handleCloseModal(); 
+      } }
+    ]);
   };
 
-  const handleSubmitDocuments = () => {
+  // ฟังก์ชันส่งเอกสารที่ปรับปรุงแล้ว
+  const handleSubmitDocuments = async () => {
     const documents = generateDocumentsList(surveyData);
     const requiredDocs = documents.filter(doc => doc.required);
     const uploadedRequiredDocs = requiredDocs.filter(doc => uploads[doc.id]);
+    
     if (uploadedRequiredDocs.length < requiredDocs.length) {
       Alert.alert("เอกสารไม่ครบ", `คุณยังอัพโหลดเอกสารไม่ครบ (${uploadedRequiredDocs.length}/${requiredDocs.length})`, [{ text: "ตกลง" }]);
       return;
     }
-    Alert.alert("ส่งเอกสารสำเร็จ", "เอกสารของคุณได้ถูกส่งเรียบร้อยแล้ว", [{ text: "ตกลง", onPress: () => { setSurveyData(null); setUploads({}); setUploadProgress({}); } }]);
+
+    setIsSubmitting(true);
+
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        Alert.alert("เกิดข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // สร้างข้อมูลส่งเอกสาร
+      const submissionData = {
+        userId: currentUser.uid,
+        userEmail: currentUser.email,
+        surveyData: surveyData,
+        uploads: uploads,
+        submittedAt: new Date().toISOString(),
+        status: "submitted", // สถานะการส่งเอกสาร
+        documentStatuses: {} // สถานะของแต่ละเอกสาร
+      };
+
+      // กำหนดสถานะเริ่มต้นให้กับแต่ละเอกสาร
+      Object.keys(uploads).forEach(docId => {
+        submissionData.documentStatuses[docId] = {
+          status: "pending", // สถานะเริ่มต้น: รอการตรวจสอบ
+          reviewedAt: null,
+          reviewedBy: null,
+          comments: ""
+        };
+      });
+
+      // บันทึกข้อมูลการส่งเอกสารใน collection ใหม่
+      const submissionRef = doc(collection(db, 'document_submissions'), currentUser.uid);
+      await setDoc(submissionRef, submissionData);
+
+      // อัพเดทสถานะในข้อมูลผู้ใช้
+      const userRef = doc(db, 'users', currentUser.uid);
+      await updateDoc(userRef, {
+        lastSubmissionAt: new Date().toISOString(),
+        hasSubmittedDocuments: true
+      });
+
+      Alert.alert(
+        "ส่งเอกสารสำเร็จ", 
+        "เอกสารของคุณได้ถูกส่งเรียบร้อยแล้ว\nคุณสามารถติดตามสถานะได้ในหน้าแสดงผล", 
+        [{ 
+          text: "ดูสถานะ", 
+          onPress: () => {
+            // นำทางไปหน้าแสดงสถานะ
+            navigation.navigate('DocumentStatusScreen', {
+              surveyData: surveyData,
+              uploads: uploads,
+              submissionData: submissionData
+            });
+          }
+        }]
+      );
+
+    } catch (error) {
+      console.error("Error submitting documents:", error);
+      Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถส่งเอกสารได้ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleRetakeSurvey = () => {
@@ -387,13 +503,23 @@ const UploadScreen = ({ navigation, route }) => {
         handleDownloadDocument={handleDownloadDocument} 
       />
       <TouchableOpacity
-        style={[styles.submitButton, stats.uploadedRequired < stats.required && styles.submitButtonDisabled]}
+        style={[
+          styles.submitButton, 
+          (stats.uploadedRequired < stats.required || isSubmitting) && styles.submitButtonDisabled
+        ]}
         onPress={handleSubmitDocuments}
-        disabled={stats.uploadedRequired < stats.required}
+        disabled={stats.uploadedRequired < stats.required || isSubmitting}
       >
-        <Text style={styles.submitButtonText}>
-          {stats.uploadedRequired >= stats.required ? 'ส่งเอกสาร' : `ส่งเอกสาร (${stats.uploadedRequired}/${stats.required})`}
-        </Text>
+        {isSubmitting ? (
+          <View style={styles.submitButtonLoading}>
+            <ActivityIndicator size="small" color="#ffffff" />
+            <Text style={[styles.submitButtonText, { marginLeft: 8 }]}>กำลังส่งเอกสาร...</Text>
+          </View>
+        ) : (
+          <Text style={styles.submitButtonText}>
+            {stats.uploadedRequired >= stats.required ? 'ส่งเอกสาร' : `ส่งเอกสาร (${stats.uploadedRequired}/${stats.required})`}
+          </Text>
+        )}
       </TouchableOpacity>
       <FileDetailModal
         visible={showFileModal}
@@ -443,6 +569,11 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: 'bold',
     letterSpacing: 0.5,
+  },
+  submitButtonLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
