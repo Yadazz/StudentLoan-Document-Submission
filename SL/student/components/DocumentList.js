@@ -21,7 +21,7 @@ const DocumentList = ({ documents, uploads, uploadProgress, handleFileUpload, ha
             {/* แก้ไข: ใช้เงื่อนไขใหม่สำหรับแสดงปุ่มดาวน์โหลด */}
             {(doc.id === 'form_101' || doc.id === 'consent_student_form' 
             || doc.id === 'consent_father_form' || doc.id === 'consent_mother_form'
-            || doc.id === 'guardian_consent'|| doc.downloadUrl) && (
+            || doc.id === 'guardian_consent' || doc.id === 'guardian_income_cert' || doc.downloadUrl) && (
               <TouchableOpacity
                 onPress={() => handleDownloadDocument(doc.id, doc.downloadUrl)} // เรียกใช้ฟังก์ชันใหม่
                 style={styles.downloadButton}
