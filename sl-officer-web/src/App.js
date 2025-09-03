@@ -9,7 +9,7 @@ import HomeScreen from "./HomeScreen.web";
 import PostScreen from "./PostScreen.web";
 import AllPostsScreen from "./AllPostsScreen";
 import PostEditScreen from "./PostEditScreen.web";
-
+import StudentInfo from "./Studentinfo";
 export default function App() {
   return (
     <Router>
@@ -21,6 +21,7 @@ export default function App() {
             <Route path="/create-post" element={<PostScreen />} />
             <Route path="/all-posts" element={<AllPostsScreen />} />
             <Route path="/edit" element={<PostEditScreen />} />
+            <Route path="/studentinfo" element={<StudentInfo />} />
           </Routes>
         </div>
       </div>
@@ -43,8 +44,8 @@ function Sidebar() {
     <div
       style={{
         width: 220,
-        background: "#3b82f6",
-        color: "#fff",
+        background: "#0C3169",
+        color: "#ffffffff",
         display: "flex",
         flexDirection: "column",
         paddingTop: 40,
@@ -57,9 +58,7 @@ function Sidebar() {
           textAlign: "center",
           marginBottom: 40,
         }}
-      >
-        Officer
-      </div>
+      ></div>
 
       <SidebarItem
         label="หน้าหลัก"
@@ -68,8 +67,8 @@ function Sidebar() {
       />
       <SidebarItem
         label="ข้อมูลนักศึกษา"
-        active={selected === "students"}
-        onClick={() => handleNavigate("/students", "students")}
+        active={selected === "studentsInfo"}
+        onClick={() => handleNavigate("/studentinfo", "studentsInfo")}
       />
 
       <div>
@@ -109,7 +108,7 @@ function SidebarItem({ label, active, onClick }) {
       onClick={onClick}
       style={{
         padding: "12px 24px",
-        background: active ? "#2563eb" : "transparent",
+        background: active ? "#1a4483ff" : "transparent",
         cursor: "pointer",
         fontWeight: active ? "bold" : "normal",
         fontSize: 16,
