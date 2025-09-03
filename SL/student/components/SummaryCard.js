@@ -20,7 +20,7 @@ const SummaryCard = ({ surveyData }) => {
     }
   };
 
-  const getIncomeLabel = (income) => income === 'มีรายได้ประจำ' ? 'มีรายได้ประจำ' : 'ไม่มีรายได้ประจำ';
+  const getIncomeLabel = (income) => income === 'มีรายได้ประจำ' ? 'มีรายได้ประจำ' : 'มีรายได้ไม่ประจำ';
   const getDocumentLabel = (status) => status === 'มีเอกสาร' ? 'มีเอกสาร' : 'ไม่มีเอกสาร';
 
   const SummaryItem = ({ label, value }) => (
