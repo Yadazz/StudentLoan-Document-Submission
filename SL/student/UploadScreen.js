@@ -18,8 +18,7 @@ import { InsertForm101 } from './documents/InsertForm101';
 import { ConsentFrom_student } from './documents/ConsentFrom_student';
 import { ConsentFrom_father } from './documents/ConsentFrom_father';
 import { ConsentFrom_mother } from './documents/ConsentFrom_mother';
-import { ConsentFrom_guardian } from './documents/ConsentFrom_guardian';
-import { GuardianIncome102 } from './documents/guardian_income102';
+import { Income102 } from './documents/income102';
 
 const { width, height } = Dimensions.get('window');
 
@@ -108,10 +107,8 @@ const UploadScreen = ({ navigation, route }) => {
       ConsentFrom_father();
     } else if (docId === 'consent_mother_form') {
       ConsentFrom_mother();
-    } else if (docId === 'guardian_consent') {
-      ConsentFrom_guardian();
-    } else if (docId === 'guardian_income_cert'){
-      GuardianIncome102();
+    } else if (docId === 'guardian_income_cert' || docId === 'father_income_cert' || docId === 'mother_income_cert' || docId === 'single_parent_income_cert' || docId === 'famo_income_cert') {
+      Income102();
     }else if (downloadUrl) {
       // สำหรับเอกสารอื่นๆ ที่มีลิงก์ ให้เปิดลิงก์นั้น
       Linking.openURL(downloadUrl).catch(() =>
@@ -138,21 +135,32 @@ const UploadScreen = ({ navigation, route }) => {
         { id: 'consent_mother_form', title: 'หนังสือยินยอมเปิดเผยข้อมูลของมารดา', required: true },
         { id: 'id_copies_mother', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของมารดา', required: true },
       );
-      if (data.fatherIncome === "มีรายได้ประจำ") {
-        documents.push({ id: 'father_income', title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของบิดา', description: 'เอกสารอายุไม่เกิน 3 เดือน', required: true });
-      } else {
+
+      // ตรวจสอบว่าทั้งพ่อและแม่มีรายได้ไม่ประจำ
+      if (data.fatherIncome !== "มีรายได้ประจำ" && data.motherIncome !== "มีรายได้ประจำ") {
+        // เพิ่มเอกสารชุดเดียวสำหรับกรณีที่ทั้งคู่มีรายได้ไม่ประจำ
         documents.push(
-          { id: 'father_income_cert', title: 'หนังสือรับรองรายได้ กยศ. 102 ของบิดา', downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link', required: true },
-          { id: 'fa_id_copies_gov', title: 'สำเนาบัตรข้าราชการผู้รับรอง', description: 'สำหรับรับรองรายได้ เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น', required: true }
+          { id: 'famo_income_cert', title: 'หนังสือรับรองรายได้ กยศ. 102 ของบิดา มารดา', required: true },
+          { id: 'famo_id_copies_gov', title: 'สำเนาบัตรข้าราชการผู้รับรอง', description: 'สำหรับรับรองรายได้ เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น', required: true }
         );
-      }
-      if (data.motherIncome === "มีรายได้ประจำ") {
-        documents.push({ id: 'mother_income', title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของมารดา', description: 'เอกสารอายุไม่เกิน 3 เดือน', required: true });
       } else {
-        documents.push(
-          { id: 'mother_income_cert', title: 'หนังสือรับรองรายได้ กยศ. 102 ของมารดา', downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link', required: true },
-          { id: 'ma_id_copies_gov', title: 'สำเนาบัตรข้าราชการผู้รับรอง', description: 'สำหรับรับรองรายได้ เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น', required: true }
-        );
+        // กรณีที่มีคนใดคนหนึ่งหรือทั้งสองคนมีรายได้ประจำ
+        if (data.fatherIncome === "มีรายได้ประจำ") {
+          documents.push({ id: 'father_income', title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของบิดา', description: 'เอกสารอายุไม่เกิน 3 เดือน', required: true });
+        } else {
+          documents.push(
+            { id: 'father_income_cert', title: 'หนังสือรับรองรายได้ กยศ. 102 ของบิดา', required: true },
+            { id: 'fa_id_copies_gov', title: 'สำเนาบัตรข้าราชการผู้รับรอง', description: 'สำหรับรับรองรายได้ เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น', required: true }
+          );
+        }
+        if (data.motherIncome === "มีรายได้ประจำ") {
+          documents.push({ id: 'mother_income', title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของมารดา', description: 'เอกสารอายุไม่เกิน 3 เดือน', required: true });
+        } else {
+          documents.push(
+            { id: 'mother_income_cert', title: 'หนังสือรับรองรายได้ กยศ. 102 ของมารดา', required: true },
+            { id: 'ma_id_copies_gov', title: 'สำเนาบัตรข้าราชการผู้รับรอง', description: 'สำหรับรับรองรายได้ เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น', required: true }
+          );
+        }
       }
     } else if (data.familyStatus === "ข") {
       let parent = data.livingWith === "บิดา" ? "บิดา" : "มารดา";
@@ -166,7 +174,7 @@ const UploadScreen = ({ navigation, route }) => {
         documents.push({ id: 'legal_status', title: 'สำเนาใบหย่า (กรณีหย่าร้าง) หรือ สำเนาใบมรณบัตร (กรณีเสียชีวิต)', required: true });
       } else {
         documents.push(
-          { id: 'family_status_cert', title: 'หนังสือรับรองสถานภาพครอบครัว', downloadUrl: 'https://drive.google.com/file/d/1m98sSlZqAi_YK3PQ2-a9FMIEri1RlENB/view?usp=drive_link', required: true },
+          { id: 'family_status_cert', title: 'หนังสือรับรองสถานภาพครอบครัว', required: true },
           { id: 'fam_id_copies_gov', title: 'สำเนาบัตรข้าราชการผู้รับรอง', description: 'สำหรับรับรองสถานภาพครอบครัว เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น', required: true }
         );
       }
@@ -175,7 +183,7 @@ const UploadScreen = ({ navigation, route }) => {
         documents.push({ id: 'single_parent_income', title: `หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของ${parent}`, description: 'เอกสารอายุไม่เกิน 3 เดือน', required: true });
       } else {
         documents.push(
-          { id: 'single_parent_income_cert', title: `หนังสือรับรองรายได้ กยศ. 102 ของ${parent}`, downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link', required: true },
+          { id: 'single_parent_income_cert', title: `หนังสือรับรองรายได้ กยศ. 102 ของ${parent}`, required: true },
           { id: '102_id_copies_gov', title: 'สำเนาบัตรข้าราชการผู้รับรอง', description: `สำหรับรับรองรายได้ของ${parent}  เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น`, required: true }
         );
       }
