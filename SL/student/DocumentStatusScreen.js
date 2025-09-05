@@ -448,6 +448,18 @@ const styles = StyleSheet.create({
   userInfo: {
     fontSize: 12,
     color: "#9ca3af",
+    textAlign: 'center',
+  },
+  userInfoContainer: {
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  studentNameInfo: {
+    fontSize: 13,
+    color: "#6b7280",
+    fontWeight: "500",
+    marginTop: 2,
+    textAlign: 'center',
   },
   overallStatusCard: {
     backgroundColor: "#fff",
