@@ -106,15 +106,15 @@ const UploadScreen = ({ navigation, route }) => {
   };
 
   // ฟังก์ชันใหม่สำหรับอัปโหลดไฟล์ไปยัง Firebase Storage
-  const uploadFileToStorage = async (file, docId, userId, userEmail) => {
+  const uploadFileToStorage = async (file, docId, userId, studentName) => {
     try {
       console.log("Starting upload for:", file.filename);
       
-      // สร้าง path สำหรับ Firebase Storage
-      const sanitizedEmail = userEmail.replace(/[.#$[\]]/g, '_');
+      // สร้าง path สำหรับ Firebase Storage โดยใช้ชื่อนักเรียน
+      const sanitizedStudentName = studentName.replace(/[.#$[\]/\\]/g, '_').replace(/\s+/g, '_');
       const timestamp = new Date().getTime();
       const fileExtension = file.filename.split('.').pop();
-      const storagePath = `student_documents/${sanitizedEmail}/${docId}_${timestamp}.${fileExtension}`;
+      const storagePath = `student_documents/${sanitizedStudentName}/${docId}_${timestamp}.${fileExtension}`;
       
       console.log("Storage path:", storagePath);
       
@@ -464,11 +464,35 @@ const UploadScreen = ({ navigation, route }) => {
       const storageUploads = {};
       const uploadPromises = [];
 
+      // ดึงข้อมูลผู้ใช้จาก Firebase เพื่อดึงชื่อจริง
+      let studentName = "Unknown_Student"; // ค่าเริ่มต้น
+      try {
+        const userRef = doc(db, 'users', currentUser.uid);
+        const userDoc = await getDoc(userRef);
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          console.log("Full user data:", userData); // Debug log
+          
+          // ดึงชื่อจากฟิลด์ที่มีในฐานข้อมูลของคุณ
+          studentName = userData.name || 
+                       userData.nickname || 
+                       `${userData.firstName || ''}_${userData.lastName || ''}`.replace('_', '') ||
+                       "Unknown_Student";
+          console.log("Found student name from database:", studentName);
+        } else {
+          console.log("User document does not exist");
+        }
+      } catch (error) {
+        console.error("Error fetching user name:", error);
+      }
+      
+      console.log("Final student name for storage:", studentName);
+
       // อัปโหลดแต่ละไฟล์ไปยัง Storage
       for (const [docId, file] of Object.entries(uploads)) {
         console.log(`เตรียมอัปโหลด: ${file.filename} (${docId})`);
         
-        const uploadPromise = uploadFileToStorage(file, docId, currentUser.uid, currentUser.email)
+        const uploadPromise = uploadFileToStorage(file, docId, currentUser.uid, studentName)
           .then((storageData) => {
             storageUploads[docId] = {
               ...file, // ข้อมูลเดิม
