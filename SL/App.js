@@ -6,10 +6,11 @@ import { createStackNavigator } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "./database/firebase";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { auth, db } from "./database/firebase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { doc, onSnapshot } from "firebase/firestore";
 
-// นำเข้าคอมโพเนนต์หน้าต่างๆ ที่เราสร้างไว้
+// Import all screens
 import HomeScreen from "./student/HomeScreen";
 import UploadScreen from "./student/UploadScreen";
 import SettingsScreen from "./student/SettingScreen";
@@ -20,7 +21,8 @@ import LoginScreen from "./LoginScreen";
 import SignUpScreen from "./SignUpScreen";
 import InsertForm from "./student/InsertForm";
 import OCR from "./model/EasyOcr/OCR";
-import DocumentStatusScreen from "./student/DocumentStatusScreen"; // เพิ่มการ import
+import DocumentStatusScreen from "./student/DocumentStatusScreen";
+import DocCooldown from "./student/components/DocCooldown";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -33,7 +35,7 @@ const LoadingScreen = () => (
   </View>
 );
 
-// สร้าง Stack Navigator สำหรับแต่ละ Tab
+// Create Stack Navigator for each Tab
 const HomeStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="HomeMain" component={HomeScreen} />
@@ -41,11 +43,44 @@ const HomeStack = () => (
   </Stack.Navigator>
 );
 
-const UploadStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="UploadMain" component={UploadScreen} />
-  </Stack.Navigator>
-);
+const UploadStack = () => {
+  const [isEnabled, setIsEnabled] = useState(null);
+
+  useEffect(() => {
+    // Listen for changes in Firestore
+    const docRef = doc(db, "DocumentService", "config");
+
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const config = docSnap.data();
+        // Check immediateAccess and isEnabled values
+        setIsEnabled(config.immediateAccess || config.isEnabled);
+      } else {
+        setIsEnabled(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Show loading screen while fetching data
+  if (isEnabled === null) {
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Loading" component={LoadingScreen} />
+      </Stack.Navigator>
+    );
+  }
+
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen
+        name="UploadMain"
+        component={isEnabled ? UploadScreen : DocCooldown}
+      />
+    </Stack.Navigator>
+  );
+};
 
 const MainTabs = () => (
   <Tab.Navigator
@@ -79,22 +114,25 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // onAuthStateChanged จะทำงานเมื่อสถานะการล็อกอินเปลี่ยนแปลง
+    // onAuthStateChanged runs when the login status changes
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log('Auth state changed:', user ? 'User logged in' : 'User logged out');
+      console.log(
+        "Auth state changed:",
+        user ? "User logged in" : "User logged out"
+      );
       if (user) {
-        // หากผู้ใช้ล็อกอินอยู่
+        // If user is logged in
         setIsAuthenticated(true);
       } else {
-        // หากผู้ใช้ออกจากระบบ
+        // If user is logged out
         setIsAuthenticated(false);
       }
-      setIsLoading(false); // เสร็จสิ้นการตรวจสอบ
+      setIsLoading(false); // Check is complete
     });
 
-    // คืนค่าฟังก์ชัน unsubscribe เพื่อยกเลิกการติดตามเมื่อคอมโพเนนต์ถูก unmount
+    // Return the unsubscribe function to clean up when the component unmounts
     return () => unsubscribe();
-  }, []); // [] ทำให้ useEffect ทำงานแค่ครั้งแรกที่คอมโพเนนต์ถูก mount
+  }, []); // [] makes useEffect run only once on component mount
 
   if (isLoading) {
     return (
@@ -116,31 +154,41 @@ const App = () => {
           <Stack.Screen name="LoginScreen" component={LoginScreen} />
           <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
           <Stack.Screen name="MainTabs" component={MainTabs} />
-          <Stack.Screen 
-            name="Document Reccommend" 
-            component={DocRecScreen} 
-            options={{ headerShown: true }} 
+          <Stack.Screen
+            name="Document Reccommend"
+            component={DocRecScreen}
+            options={{ headerShown: true }}
           />
-          <Stack.Screen 
-            name="ProfileScreen" 
-            component={ProfileScreen} 
-            options={{ title: "โปรไฟล์", headerShown: true }} 
+          <Stack.Screen
+            name="ProfileScreen"
+            component={ProfileScreen}
+            options={{ title: "โปรไฟล์", headerShown: true }}
           />
-          {/* เพิ่มหน้า DocumentStatusScreen */}
-          <Stack.Screen 
-            name="DocumentStatusScreen" 
-            component={DocumentStatusScreen} 
-            options={{ 
-              title: "สถานะเอกสาร", 
+          {/* Add DocumentStatusScreen */}
+          <Stack.Screen
+            name="DocumentStatusScreen"
+            component={DocumentStatusScreen}
+            options={{
+              title: "สถานะเอกสาร",
               headerShown: true,
               headerStyle: {
-                backgroundColor: '#2563eb',
+                backgroundColor: "#2563eb",
               },
-              headerTintColor: '#ffffff',
+              headerTintColor: "#ffffff",
               headerTitleStyle: {
-                fontWeight: 'bold',
+                fontWeight: "bold",
               },
-            }} 
+            }}
+          />
+          {/* Add DocCooldown screen */}
+          <Stack.Screen
+            name="DocCooldown"
+            component={DocCooldown}
+            options={{
+              headerShown: true,
+              title: "สถานะระบบ",
+              headerLeft: null, // Prevent going back
+            }}
           />
         </Stack.Navigator>
       </NavigationContainer>
@@ -151,14 +199,14 @@ const App = () => {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f0f2f5',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f0f2f5",
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    color: "#666",
   },
 });
 
