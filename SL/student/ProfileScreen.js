@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { 
   View, Text, StyleSheet, ActivityIndicator, ScrollView, 
-  TouchableOpacity, Alert, Modal, TextInput, Pressable 
+  TouchableOpacity, Alert, TextInput 
 } from "react-native";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../database/firebase";
@@ -10,8 +10,7 @@ const ProfileScreen = ({ navigation }) => {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // modal state
-  const [modalVisible, setModalVisible] = useState(false);
+  // inline edit state
   const [editingField, setEditingField] = useState(null);
   const [editingSection, setEditingSection] = useState(null);
   const [newValue, setNewValue] = useState("");
@@ -39,13 +38,6 @@ const ProfileScreen = ({ navigation }) => {
     fetchUserData();
   }, [navigation]);
 
-  const openEditModal = (section, field, currentValue) => {
-    setEditingSection(section);
-    setEditingField(field);
-    setNewValue(currentValue || "");
-    setModalVisible(true);
-  };
-
   const saveEdit = async () => {
     if (!editingField) return;
     try {
@@ -53,47 +45,60 @@ const ProfileScreen = ({ navigation }) => {
       const userRef = doc(db, "users", user.uid);
 
       let updateData = {};
-      if (editingSection) {
-        updateData[`${editingSection}.${editingField}`] = newValue;
-      } else {
-        updateData[editingField] = newValue;
-      }
+      updateData[editingField] = newValue;
 
       await updateDoc(userRef, updateData);
 
       setUserData(prev => {
-        if (editingSection) {
-          return {
-            ...prev,
-            [editingSection]: {
-              ...prev[editingSection],
-              [editingField]: newValue
-            }
-          };
+        const updated = { ...prev };
+        const keys = editingField.split(".");
+        let obj = updated;
+        for (let i = 0; i < keys.length - 1; i++) {
+          obj = obj[keys[i]];
         }
-        return {
-          ...prev,
-          [editingField]: newValue
-        };
+        obj[keys[keys.length - 1]] = newValue;
+        return updated;
       });
-
-      Alert.alert("สำเร็จ", "อัพเดทข้อมูลเรียบร้อยแล้ว");
     } catch (error) {
       Alert.alert("Error", "Failed to update data");
     } finally {
-      setModalVisible(false);
+      setEditingField(null);
+      setEditingSection(null);
     }
   };
 
-  const renderField = (label, value, section = null, field = null) => (
-    <TouchableOpacity 
-      style={styles.fieldContainer}
-      onPress={() => openEditModal(section, field || label, value)}
-    >
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <Text style={styles.fieldValue}>{value || "-"}</Text>
-    </TouchableOpacity>
-  );
+  const renderField = (label, value, section = null, field = null) => {
+    const fieldKey = section ? `${section}.${field || label}` : field || label;
+    const isEditing = editingField === fieldKey;
+
+    return (
+      <View style={styles.fieldContainer}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        {isEditing ? (
+          <TextInput
+            value={newValue}
+            onChangeText={setNewValue}
+            style={styles.inputInline}
+            autoFocus
+            onBlur={saveEdit} 
+            returnKeyType="done"
+            onSubmitEditing={saveEdit}
+          />
+        ) : (
+          <TouchableOpacity
+            style={{ flex: 2 }}
+            onPress={() => {
+              setEditingSection(section);
+              setEditingField(fieldKey);
+              setNewValue(value || "");
+            }}
+          >
+            <Text style={styles.fieldValue}>{value || "-"}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   const renderAddress = (address, sectionPath, label) => {
     if (!address) return null;
@@ -130,7 +135,6 @@ const ProfileScreen = ({ navigation }) => {
     );
   };
 
-  // render survey section
   const renderSurvey = (survey) => {
     if (!survey) return null;
 
@@ -189,37 +193,8 @@ const ProfileScreen = ({ navigation }) => {
         {renderParentInfo(userData.mother_info, "mother_info")}
         {renderParentInfo(userData.guardian_info, "guardian_info")}
 
-        {/* survey section */}
         {renderSurvey(userData.survey)}
       </ScrollView>
-
-      {/* Modal สำหรับแก้ไข */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={modalVisible}
-      >
-        <View style={styles.modalBackground}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>แก้ไข {editingField}</Text>
-            <TextInput
-              value={newValue}
-              onChangeText={setNewValue}
-              style={styles.input}
-              placeholder="กรอกข้อมูลใหม่"
-              placeholderTextColor="#aaa"
-            />
-            <View style={styles.modalButtons}>
-              <Pressable style={[styles.button, styles.cancelButton]} onPress={() => setModalVisible(false)}>
-                <Text style={styles.buttonText}>ยกเลิก</Text>
-              </Pressable>
-              <Pressable style={[styles.button, styles.saveButton]} onPress={saveEdit}>
-                <Text style={styles.buttonText}>บันทึก</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
@@ -268,56 +243,14 @@ const styles = StyleSheet.create({
     color: "#111827",
     textAlign: "right",
   },
-  modalBackground: {
-    flex:1,
-    backgroundColor:"rgba(0,0,0,0.5)",
-    justifyContent:"center",
-    alignItems:"center"
-  },
-  modalContainer: {
-    width:"85%",
-    backgroundColor:"white",
-    padding:20,
-    borderRadius:12,
-    shadowColor:"#000",
-    shadowOpacity:0.2,
-    shadowRadius:6,
-    elevation:5
-  },
-  modalTitle: {
-    fontSize:18,
-    fontWeight:"bold",
-    marginBottom:15,
-    color:"#1E3A8A"
-  },
-  input: {
-    borderWidth:1,
-    borderColor:"#D1D5DB",
-    padding:12,
-    marginBottom:20,
-    borderRadius:8,
-    fontSize:16,
-    color:"#111827"
-  },
-  modalButtons: {
-    flexDirection:"row",
-    justifyContent:"flex-end",
-    gap:10
-  },
-  button: {
-    paddingVertical:10,
-    paddingHorizontal:18,
-    borderRadius:8
-  },
-  cancelButton: {
-    backgroundColor:"#9CA3AF",
-  },
-  saveButton: {
-    backgroundColor:"#3B82F6",
-  },
-  buttonText: {
-    color:"white",
-    fontWeight:"bold"
+  inputInline: {
+    borderBottomWidth: 1,
+    borderColor: "#3B82F6",
+    paddingVertical: 4,
+    fontSize: 16,
+    color: "#111827",
+    flex: 2,
+    textAlign: "right"
   },
   timestamp: {
     marginTop: 10,
