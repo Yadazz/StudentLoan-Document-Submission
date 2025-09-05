@@ -1,4 +1,4 @@
-// UploadScreen.js (Main Component) - Updated
+// UploadScreen.js (Main Component) - Updated with Firebase Storage
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Platform, Dimensions, Image, ActivityIndicator } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
@@ -6,6 +6,9 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { db, auth } from '../database/firebase';
 import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, deleteDoc } from 'firebase/firestore';
+// เพิ่ม import สำหรับ Firebase Storage
+import { storage } from '../database/firebase';
+import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 
 // Import refactored components
 import NoSurveyCard from './components/NoSurveyCard';
@@ -36,7 +39,9 @@ const UploadScreen = ({ navigation, route }) => {
   const [contentType, setContentType] = useState('');
   const [imageZoom, setImageZoom] = useState(1);
   const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
-  const [isSubmitting, setIsSubmitting] = useState(false); // เพิ่ม state สำหรับการส่งข้อมูล
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // เพิ่ม state สำหรับติดตามการอัปโหลดแต่ละไฟล์
+  const [storageUploadProgress, setStorageUploadProgress] = useState({});
 
   useEffect(() => {
     const fetchSurveyData = async () => {
@@ -52,13 +57,12 @@ const UploadScreen = ({ navigation, route }) => {
         }
 
         // เรียกข้อมูล Survey ของผู้ใช้จาก Firestore
-        const userSurveyRef = doc(db, 'users', currentUser.uid); // เรียก document ของผู้ใช้
-        const userSurveyDoc = await getDoc(userSurveyRef); // ตรวจสอบว่า document นี้มีอยู่หรือไม่
+        const userSurveyRef = doc(db, 'users', currentUser.uid);
+        const userSurveyDoc = await getDoc(userSurveyRef);
 
         if (userSurveyDoc.exists()) {
-          // ถ้ามีเอกสาร
-          const userData = userSurveyDoc.data(); // ดึงข้อมูลทั้งหมดจาก document ของผู้ใช้
-          const surveyData = userData.survey; // เข้าถึงฟิลด์ survey
+          const userData = userSurveyDoc.data();
+          const surveyData = userData.survey;
           setSurveyData(surveyData);
           setSurveyDocId(userSurveyDoc.id);
           
@@ -101,6 +105,81 @@ const UploadScreen = ({ navigation, route }) => {
     }
   };
 
+  // ฟังก์ชันใหม่สำหรับอัปโหลดไฟล์ไปยัง Firebase Storage
+  const uploadFileToStorage = async (file, docId, userId, userEmail) => {
+    try {
+      console.log("Starting upload for:", file.filename);
+      
+      // สร้าง path สำหรับ Firebase Storage
+      const sanitizedEmail = userEmail.replace(/[.#$[\]]/g, '_');
+      const timestamp = new Date().getTime();
+      const fileExtension = file.filename.split('.').pop();
+      const storagePath = `student_documents/${sanitizedEmail}/${docId}_${timestamp}.${fileExtension}`;
+      
+      console.log("Storage path:", storagePath);
+      
+      // อ่านไฟล์เป็น blob
+      const response = await fetch(file.uri);
+      const blob = await response.blob();
+      
+      console.log("File converted to blob, size:", blob.size);
+      
+      // สร้าง reference ใน Storage
+      const storageRef = ref(storage, storagePath);
+      
+      // อัปโหลดพร้อมติดตาม progress
+      const uploadTask = uploadBytesResumable(storageRef, blob);
+      
+      return new Promise((resolve, reject) => {
+        uploadTask.on('state_changed',
+          (snapshot) => {
+            // คำนวณ progress
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            console.log(`Upload ${docId}: ${progress}% completed`);
+            
+            // อัปเดท progress state
+            setStorageUploadProgress(prev => ({
+              ...prev,
+              [docId]: Math.round(progress)
+            }));
+          },
+          (error) => {
+            console.error("Upload error:", error);
+            reject(error);
+          },
+          async () => {
+            try {
+              // อัปโหลดเสร็จแล้ว ดึง download URL
+              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+              console.log("Upload completed, URL:", downloadURL);
+              
+              // ลบ progress state
+              setStorageUploadProgress(prev => {
+                const newState = { ...prev };
+                delete newState[docId];
+                return newState;
+              });
+              
+              resolve({
+                downloadURL,
+                storagePath,
+                uploadedAt: new Date().toISOString(),
+                originalFileName: file.filename,
+                fileSize: file.size,
+                mimeType: file.mimeType
+              });
+            } catch (error) {
+              reject(error);
+            }
+          }
+        );
+      });
+    } catch (error) {
+      console.error("Error in uploadFileToStorage:", error);
+      throw error;
+    }
+  };
+
   const deleteSurveyData = async () => {
     const currentUser = auth.currentUser;
     if (!currentUser) {
@@ -108,10 +187,10 @@ const UploadScreen = ({ navigation, route }) => {
       return;
     }
     try {
-      const userSurveyRef = doc(db, 'users', currentUser.uid); // เรียก document ของผู้ใช้
+      const userSurveyRef = doc(db, 'users', currentUser.uid);
       await updateDoc(userSurveyRef, {
-        survey: {}, // ลบข้อมูลในฟิลด์ survey โดยการตั้งให้เป็น object ว่าง
-        uploads: {} // ลบข้อมูล uploads ด้วย
+        survey: {},
+        uploads: {}
       });
       console.log("Survey data successfully deleted from Firestore!");
     } catch (error) {
@@ -120,10 +199,8 @@ const UploadScreen = ({ navigation, route }) => {
     }
   };
 
-  // ฟังก์ชันใหม่สำหรับจัดการการดาวน์โหลดเอกสาร เดี๋ยวต้องมาแก้ตรงนี้ถ้าทำเอกสารเพิ่มแล้ว
   const handleDownloadDocument = (docId, downloadUrl) => {
     if (docId === 'form_101') {
-      // สำหรับแบบฟอร์ม กยศ.101 ให้เรียกใช้ฟังก์ชันสร้าง PDF
       InsertForm101();
     } else if (docId === 'consent_student_form') {
       ConsentFrom_student();
@@ -134,7 +211,6 @@ const UploadScreen = ({ navigation, route }) => {
     } else if (docId === 'guardian_income_cert' || docId === 'father_income_cert' || docId === 'mother_income_cert' || docId === 'single_parent_income_cert' || docId === 'famo_income_cert') {
       Income102();
     } else if (downloadUrl) {
-      // สำหรับเอกสารอื่นๆ ที่มีลิงก์ ให้เปิดลิงก์นั้น
       Linking.openURL(downloadUrl).catch(() =>
         Alert.alert("ไม่สามารถดาวน์โหลดไฟล์ได้")
       );
@@ -160,15 +236,12 @@ const UploadScreen = ({ navigation, route }) => {
         { id: 'id_copies_mother', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของมารดา', required: true },
       );
 
-      // ตรวจสอบว่าทั้งพ่อและแม่มีรายได้ไม่ประจำ
       if (data.fatherIncome !== "มีรายได้ประจำ" && data.motherIncome !== "มีรายได้ประจำ") {
-        // เพิ่มเอกสารชุดเดียวสำหรับกรณีที่ทั้งคู่มีรายได้ไม่ประจำ
         documents.push(
           { id: 'famo_income_cert', title: 'หนังสือรับรองรายได้ กยศ. 102 ของบิดา มารดา', required: true },
           { id: 'famo_id_copies_gov', title: 'สำเนาบัตรข้าราชการผู้รับรอง', description: 'สำหรับรับรองรายได้ เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น', required: true }
         );
       } else {
-        // กรณีที่มีคนใดคนหนึ่งหรือทั้งสองคนมีรายได้ประจำ
         if (data.fatherIncome === "มีรายได้ประจำ") {
           documents.push({ id: 'father_income', title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของบิดา', description: 'เอกสารอายุไม่เกิน 3 เดือน', required: true });
         } else {
@@ -188,7 +261,7 @@ const UploadScreen = ({ navigation, route }) => {
       }
     } else if (data.familyStatus === "ข") {
       let parent = data.livingWith === "บิดา" ? "บิดา" : "มารดา";
-      let consentFormId = data.livingWith === "บิดา" ? 'consent_father_form' : 'consent_mother_form'; // เลือกไฟล์ตามที่อยู่กับพ่อหรือแม่
+      let consentFormId = data.livingWith === "บิดา" ? 'consent_father_form' : 'consent_mother_form';
       
       documents.push(
         { id: consentFormId, title: `หนังสือยินยอมเปิดเผยข้อมูลของ ${parent}`, required: true },
@@ -333,7 +406,7 @@ const UploadScreen = ({ navigation, route }) => {
           mimeType: file.mimeType, 
           size: file.size, 
           uploadDate: new Date().toLocaleString("th-TH"), 
-          status: "pending", // เพิ่ม status เริ่มต้น
+          status: "pending",
         }
       };
       
@@ -364,7 +437,7 @@ const UploadScreen = ({ navigation, route }) => {
     ]);
   };
 
-  // ฟังก์ชันส่งเอกสารที่ปรับปรุงแล้ว
+  // ฟังก์ชันส่งเอกสารที่อัปเดตใหม่พร้อม Firebase Storage
   const handleSubmitDocuments = async () => {
     const documents = generateDocumentsList(surveyData);
     const requiredDocs = documents.filter(doc => doc.required);
@@ -385,19 +458,51 @@ const UploadScreen = ({ navigation, route }) => {
         return;
       }
 
+      console.log("เริ่มต้นการอัปโหลดเอกสารไปยัง Firebase Storage...");
+
+      // สร้าง object สำหรับเก็บข้อมูล Storage URLs
+      const storageUploads = {};
+      const uploadPromises = [];
+
+      // อัปโหลดแต่ละไฟล์ไปยัง Storage
+      for (const [docId, file] of Object.entries(uploads)) {
+        console.log(`เตรียมอัปโหลด: ${file.filename} (${docId})`);
+        
+        const uploadPromise = uploadFileToStorage(file, docId, currentUser.uid, currentUser.email)
+          .then((storageData) => {
+            storageUploads[docId] = {
+              ...file, // ข้อมูลเดิม
+              ...storageData, // ข้อมูลจาก Storage (downloadURL, storagePath, etc.)
+              storageUploaded: true,
+              status: "uploaded_to_storage"
+            };
+            console.log(`อัปโหลดสำเร็จ: ${file.filename}`);
+          })
+          .catch((error) => {
+            console.error(`อัปโหลดล้มเหลว: ${file.filename}`, error);
+            throw new Error(`ไม่สามารถอัปโหลดไฟล์ ${file.filename} ได้: ${error.message}`);
+          });
+        
+        uploadPromises.push(uploadPromise);
+      }
+
+      // รอให้ไฟล์ทั้งหมดอัปโหลดเสร็จ
+      await Promise.all(uploadPromises);
+      console.log("อัปโหลดไฟล์ทั้งหมดเสร็จสิ้น");
+
       // สร้างข้อมูลส่งเอกสาร
       const submissionData = {
         userId: currentUser.uid,
         userEmail: currentUser.email,
         surveyData: surveyData,
-        uploads: uploads,
+        uploads: storageUploads, // ใช้ข้อมูลที่มี Storage URLs
         submittedAt: new Date().toISOString(),
-        status: "submitted", // สถานะการส่งเอกสาร
-        documentStatuses: {} // สถานะของแต่ละเอกสาร
+        status: "submitted",
+        documentStatuses: {}
       };
 
       // กำหนดสถานะเริ่มต้นให้กับแต่ละเอกสาร
-      Object.keys(uploads).forEach(docId => {
+      Object.keys(storageUploads).forEach(docId => {
         submissionData.documentStatuses[docId] = {
           status: "pending", // สถานะเริ่มต้น: รอการตรวจสอบ
           reviewedAt: null,
@@ -405,6 +510,8 @@ const UploadScreen = ({ navigation, route }) => {
           comments: ""
         };
       });
+
+      console.log("บันทึกข้อมูลการส่งเอกสารลงฐานข้อมูล...");
 
       // บันทึกข้อมูลการส่งเอกสารใน collection ใหม่
       const submissionRef = doc(collection(db, 'document_submissions'), currentUser.uid);
@@ -414,19 +521,22 @@ const UploadScreen = ({ navigation, route }) => {
       const userRef = doc(db, 'users', currentUser.uid);
       await updateDoc(userRef, {
         lastSubmissionAt: new Date().toISOString(),
-        hasSubmittedDocuments: true
+        hasSubmittedDocuments: true,
+        uploads: storageUploads // อัปเดตข้อมูล uploads ด้วย Storage URLs
       });
+
+      console.log("บันทึกข้อมูลสำเร็จ");
 
       Alert.alert(
         "ส่งเอกสารสำเร็จ", 
-        "เอกสารของคุณได้ถูกส่งเรียบร้อยแล้ว\nคุณสามารถติดตามสถานะได้ในหน้าแสดงผล", 
+        "เอกสารของคุณได้ถูกส่งและอัปโหลดเรียบร้อยแล้ว\nคุณสามารถติดตามสถานะได้ในหน้าแสดงผล", 
         [{ 
           text: "ดูสถานะ", 
           onPress: () => {
             // นำทางไปหน้าแสดงสถานะ
             navigation.navigate('DocumentStatusScreen', {
               surveyData: surveyData,
-              uploads: uploads,
+              uploads: storageUploads,
               submissionData: submissionData
             });
           }
@@ -435,9 +545,11 @@ const UploadScreen = ({ navigation, route }) => {
 
     } catch (error) {
       console.error("Error submitting documents:", error);
-      Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถส่งเอกสารได้ กรุณาลองใหม่อีกครั้ง");
+      Alert.alert("เกิดข้อผิดพลาด", `ไม่สามารถส่งเอกสารได้: ${error.message}\nกรุณาลองใหม่อีกครั้ง`);
     } finally {
       setIsSubmitting(false);
+      // ล้าง storage upload progress
+      setStorageUploadProgress({});
     }
   };
 
@@ -455,6 +567,7 @@ const UploadScreen = ({ navigation, route }) => {
             setSurveyData(null);
             setUploads({});
             setUploadProgress({});
+            setStorageUploadProgress({});
           }
         }
       ]
@@ -493,6 +606,28 @@ const UploadScreen = ({ navigation, route }) => {
     <ScrollView contentContainerStyle={styles.container}>
       <UploadHeader surveyData={surveyData} onRetakeSurvey={handleRetakeSurvey} />
       <UploadProgress stats={stats} />
+      
+      {/* แสดง Storage Upload Progress ถ้ามี */}
+      {Object.keys(storageUploadProgress).length > 0 && (
+        <View style={styles.storageProgressCard}>
+          <Text style={styles.storageProgressTitle}>กำลังอัปโหลดไฟล์...</Text>
+          {Object.entries(storageUploadProgress).map(([docId, progress]) => (
+            <View key={docId} style={styles.storageProgressItem}>
+              <Text style={styles.storageProgressLabel}>{uploads[docId]?.filename || docId}</Text>
+              <View style={styles.storageProgressBar}>
+                <View 
+                  style={[
+                    styles.storageProgressFill, 
+                    { width: `${progress}%` }
+                  ]} 
+                />
+              </View>
+              <Text style={styles.storageProgressText}>{progress}%</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       <DocumentList
         documents={documents}
         uploads={uploads}
@@ -502,6 +637,7 @@ const UploadScreen = ({ navigation, route }) => {
         handleShowFileModal={handleShowFileModal}
         handleDownloadDocument={handleDownloadDocument} 
       />
+      
       <TouchableOpacity
         style={[
           styles.submitButton, 
@@ -513,7 +649,12 @@ const UploadScreen = ({ navigation, route }) => {
         {isSubmitting ? (
           <View style={styles.submitButtonLoading}>
             <ActivityIndicator size="small" color="#ffffff" />
-            <Text style={[styles.submitButtonText, { marginLeft: 8 }]}>กำลังส่งเอกสาร...</Text>
+            <Text style={[styles.submitButtonText, { marginLeft: 8 }]}>
+              {Object.keys(storageUploadProgress).length > 0 
+                ? `กำลังอัปโหลด... (${Object.keys(storageUploadProgress).length} ไฟล์)`
+                : 'กำลังส่งเอกสาร...'
+              }
+            </Text>
           </View>
         ) : (
           <Text style={styles.submitButtonText}>
@@ -521,6 +662,7 @@ const UploadScreen = ({ navigation, route }) => {
           </Text>
         )}
       </TouchableOpacity>
+      
       <FileDetailModal
         visible={showFileModal}
         onClose={handleCloseModal}
@@ -574,6 +716,50 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Styles สำหรับ Storage Progress
+  storageProgressCard: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  storageProgressTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  storageProgressItem: {
+    marginBottom: 12,
+  },
+  storageProgressLabel: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 4,
+  },
+  storageProgressBar: {
+    height: 6,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  storageProgressFill: {
+    height: '100%',
+    backgroundColor: '#10b981',
+    borderRadius: 3,
+  },
+  storageProgressText: {
+    fontSize: 12,
+    color: '#10b981',
+    textAlign: 'right',
+    fontWeight: '600',
   },
 });
 
