@@ -22,6 +22,7 @@ import { ConsentFrom_student } from './documents/ConsentFrom_student';
 import { ConsentFrom_father } from './documents/ConsentFrom_father';
 import { ConsentFrom_mother } from './documents/ConsentFrom_mother';
 import { Income102 } from './documents/income102';
+import { FamStatus_cert } from './documents/FamStatus_cert';
 
 const { width, height } = Dimensions.get('window');
 
@@ -199,8 +200,10 @@ const UploadScreen = ({ navigation, route }) => {
     }
   };
 
+    // ฟังก์ชันใหม่สำหรับจัดการการดาวน์โหลดเอกสาร เดี๋ยวต้องมาแก้ตรงนี้ถ้าทำเอกสารเพิ่มแล้ว
   const handleDownloadDocument = (docId, downloadUrl) => {
     if (docId === 'form_101') {
+      // สำหรับแบบฟอร์ม กยศ.101 ให้เรียกใช้ฟังก์ชันสร้าง PDF
       InsertForm101();
     } else if (docId === 'consent_student_form') {
       ConsentFrom_student();
@@ -210,7 +213,10 @@ const UploadScreen = ({ navigation, route }) => {
       ConsentFrom_mother();
     } else if (docId === 'guardian_income_cert' || docId === 'father_income_cert' || docId === 'mother_income_cert' || docId === 'single_parent_income_cert' || docId === 'famo_income_cert') {
       Income102();
+    } else if (docId === 'family_status_cert' || docId === 'family_status_required') {
+      FamStatus_cert();
     } else if (downloadUrl) {
+      // สำหรับเอกสารอื่นๆ ที่มีลิงก์ ให้เปิดลิงก์นั้น
       Linking.openURL(downloadUrl).catch(() =>
         Alert.alert("ไม่สามารถดาวน์โหลดไฟล์ได้")
       );
