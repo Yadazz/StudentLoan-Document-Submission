@@ -7,7 +7,8 @@ import {
   TouchableOpacity, 
   ActivityIndicator,
   RefreshControl,
-  Alert 
+  Alert,
+  Linking
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { db, auth } from '../database/firebase';
@@ -100,6 +101,14 @@ const DocumentStatusScreen = ({ route, navigation }) => {
           text: "กำลังตรวจสอบ",
           textColor: "#1e40af"
         };
+      case "uploaded_to_storage":
+        return {
+          color: "#8b5cf6",
+          bgColor: "#ede9fe",
+          icon: "cloud-upload-outline",
+          text: "อัปโหลดแล้ว",
+          textColor: "#6d28d9"
+        };
       default:
         return {
           color: "#6b7280",
@@ -108,6 +117,43 @@ const DocumentStatusScreen = ({ route, navigation }) => {
           text: "ไม่ทราบสถานะ",
           textColor: "#374151"
         };
+    }
+  };
+
+  // ฟังก์ชันจัดรูปแบบขนาดไฟล์
+  const formatFileSize = (bytes) => {
+    if (!bytes) return 'ไม่ทราบขนาด';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // ฟังก์ชันสำหรับเปิดไฟล์จาก Storage
+  const handleOpenStorageFile = async (file) => {
+    try {
+      if (file.downloadURL) {
+        // ถ้ามี downloadURL ให้เปิด browser
+        const canOpen = await Linking.canOpenURL(file.downloadURL);
+        if (canOpen) {
+          await Linking.openURL(file.downloadURL);
+        } else {
+          Alert.alert("ไม่สามารถเปิดไฟล์ได้", "ไม่สามารถเปิดลิงก์ไฟล์นี้ได้");
+        }
+      } else if (file.uri) {
+        // ถ้ามีแค่ local URI (กรณีเก่า)
+        const isAvailable = await Sharing.isAvailableAsync();
+        if (!isAvailable) {
+          Alert.alert("ไม่สามารถเปิดไฟล์ได้", "อุปกรณ์ของคุณไม่รองรับการเปิดไฟล์นี้");
+          return;
+        }
+        await Sharing.shareAsync(file.uri);
+      } else {
+        Alert.alert("ไม่พบไฟล์", "ไม่สามารถเข้าถึงไฟล์นี้ได้");
+      }
+    } catch (error) {
+      console.error("Error opening file:", error);
+      Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถเปิดไฟล์นี้ได้");
     }
   };
 
@@ -123,36 +169,72 @@ const DocumentStatusScreen = ({ route, navigation }) => {
     }
 
     return Object.entries(submissionData.uploads).map(([docId, file]) => {
-      const docStatus = submissionData.documentStatuses?.[docId]?.status || "pending";
+      const docStatus = submissionData.documentStatuses?.[docId]?.status || file.status || "pending";
       const statusInfo = getStatusInfo(docStatus);
       const reviewComments = submissionData.documentStatuses?.[docId]?.comments || "";
+      const isStorageFile = file.storageUploaded && file.downloadURL;
 
       return (
         <View key={docId} style={styles.fileCard}>
           <View style={styles.fileHeader}>
             <View style={styles.fileInfo}>
-              <Ionicons name="document-text-outline" size={24} color="#2563eb" />
+              <Ionicons 
+                name={isStorageFile ? "cloud-outline" : "document-text-outline"} 
+                size={24} 
+                color="#2563eb" 
+              />
               <View style={styles.fileDetails}>
-                <Text style={styles.fileName} numberOfLines={1}>{file.filename}</Text>
-                <Text style={styles.fileMeta}>
-                  {file.size ? `${(file.size / 1024).toFixed(1)} KB` : "ไม่ทราบขนาด"} • 
-                  {file.uploadDate || "ไม่ทราบเวลา"}
+                <Text style={styles.fileName} numberOfLines={1}>
+                  {file.originalFileName || file.filename}
                 </Text>
+                <View style={styles.fileMetaContainer}>
+                  <Text style={styles.fileMeta}>
+                    {formatFileSize(file.fileSize || file.size)} • 
+                    {file.uploadedAt ? 
+                      new Date(file.uploadedAt).toLocaleString('th-TH') : 
+                      (file.uploadDate || "ไม่ทราบเวลา")
+                    }
+                  </Text>
+                  {isStorageFile && (
+                    <View style={styles.storageIndicator}>
+                      <Ionicons name="cloud-done-outline" size={14} color="#10b981" />
+                      <Text style={styles.storageText}>Cloud Storage</Text>
+                    </View>
+                  )}
+                </View>
               </View>
             </View>
             
-            <View style={[styles.statusBadge, { backgroundColor: statusInfo.bgColor }]}>
-              <Ionicons 
-                name={statusInfo.icon} 
-                size={16} 
-                color={statusInfo.color} 
-                style={styles.statusIcon} 
-              />
-              <Text style={[styles.statusText, { color: statusInfo.textColor }]}>
-                {statusInfo.text}
-              </Text>
+            <View style={styles.rightSection}>
+              <View style={[styles.statusBadge, { backgroundColor: statusInfo.bgColor }]}>
+                <Ionicons 
+                  name={statusInfo.icon} 
+                  size={16} 
+                  color={statusInfo.color} 
+                  style={styles.statusIcon} 
+                />
+                <Text style={[styles.statusText, { color: statusInfo.textColor }]}>
+                  {statusInfo.text}
+                </Text>
+              </View>
+              
+              {/* ปุ่มเปิดไฟล์ */}
+              <TouchableOpacity
+                style={styles.openFileButton}
+                onPress={() => handleOpenStorageFile(file)}
+              >
+                <Ionicons name="eye-outline" size={16} color="#2563eb" />
+              </TouchableOpacity>
             </View>
           </View>
+
+          {/* แสดงข้อมูล Storage Path ถ้ามี */}
+          {file.storagePath && (
+            <View style={styles.storageInfo}>
+              <Text style={styles.storagePathLabel}>Storage Path:</Text>
+              <Text style={styles.storagePathText} numberOfLines={1}>{file.storagePath}</Text>
+            </View>
+          )}
 
           {reviewComments ? (
             <View style={styles.commentSection}>
@@ -167,13 +249,23 @@ const DocumentStatusScreen = ({ route, navigation }) => {
 
   // คำนวณสถิติเอกสาร
   const getDocumentStats = () => {
-    if (!submissionData?.documentStatuses) return { pending: 0, approved: 0, rejected: 0, total: 0 };
+    if (!submissionData?.documentStatuses && !submissionData?.uploads) {
+      return { pending: 0, approved: 0, rejected: 0, uploaded: 0, total: 0 };
+    }
 
-    const statuses = Object.values(submissionData.documentStatuses);
+    // ใช้ documentStatuses ถ้ามี ถ้าไม่มีให้ใช้สถานะจาก uploads
+    let statuses = [];
+    if (submissionData.documentStatuses) {
+      statuses = Object.values(submissionData.documentStatuses);
+    } else if (submissionData.uploads) {
+      statuses = Object.values(submissionData.uploads).map(file => ({ status: file.status || "pending" }));
+    }
+
     return {
       pending: statuses.filter(doc => doc.status === "pending" || doc.status === "under_review").length,
       approved: statuses.filter(doc => doc.status === "approved").length,
       rejected: statuses.filter(doc => doc.status === "rejected").length,
+      uploaded: statuses.filter(doc => doc.status === "uploaded_to_storage").length,
       total: statuses.length
     };
   };
@@ -220,6 +312,11 @@ const DocumentStatusScreen = ({ route, navigation }) => {
         <Text style={styles.subtitle}>
           ส่งเมื่อ: {submittedDate}
         </Text>
+        {submissionData.userId && (
+          <Text style={styles.userInfo}>
+            ผู้ส่ง: {submissionData.userEmail || submissionData.userId}
+          </Text>
+        )}
       </View>
 
       {/* Overall Status */}
@@ -231,6 +328,10 @@ const DocumentStatusScreen = ({ route, navigation }) => {
             <Text style={styles.statusLabel}>อนุมัติแล้ว</Text>
           </View>
           <View style={styles.statusItem}>
+            <Text style={[styles.statusNumber, { color: "#8b5cf6" }]}>{stats.uploaded}</Text>
+            <Text style={styles.statusLabel}>อัปโหลดแล้ว</Text>
+          </View>
+          <View style={styles.statusItem}>
             <Text style={[styles.statusNumber, { color: "#f59e0b" }]}>{stats.pending}</Text>
             <Text style={styles.statusLabel}>รอตรวจสอบ</Text>
           </View>
@@ -238,10 +339,9 @@ const DocumentStatusScreen = ({ route, navigation }) => {
             <Text style={[styles.statusNumber, { color: "#ef4444" }]}>{stats.rejected}</Text>
             <Text style={styles.statusLabel}>ไม่อนุมัติ</Text>
           </View>
-          <View style={styles.statusItem}>
-            <Text style={[styles.statusNumber, { color: "#6b7280" }]}>{stats.total}</Text>
-            <Text style={styles.statusLabel}>ทั้งหมด</Text>
-          </View>
+        </View>
+        <View style={styles.totalContainer}>
+          <Text style={styles.totalText}>รวม {stats.total} เอกสาร</Text>
         </View>
       </View>
 
@@ -343,6 +443,11 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: "#64748b",
+    marginBottom: 4,
+  },
+  userInfo: {
+    fontSize: 12,
+    color: "#9ca3af",
   },
   overallStatusCard: {
     backgroundColor: "#fff",
@@ -364,12 +469,13 @@ const styles = StyleSheet.create({
   statusGrid: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    marginBottom: 12,
   },
   statusItem: {
     alignItems: 'center',
   },
   statusNumber: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "bold",
     marginBottom: 4,
   },
@@ -377,6 +483,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#64748b",
     textAlign: 'center',
+  },
+  totalContainer: {
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+  },
+  totalText: {
+    fontSize: 14,
+    color: "#6b7280",
+    fontWeight: "500",
   },
   section: {
     backgroundColor: "#fff",
@@ -410,7 +527,7 @@ const styles = StyleSheet.create({
   fileInfo: {
     flexDirection: 'row',
     flex: 1,
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   fileDetails: {
     marginLeft: 12,
@@ -420,11 +537,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
     color: "#1e293b",
-    marginBottom: 2,
+    marginBottom: 4,
+  },
+  fileMetaContainer: {
+    flexDirection: 'column',
   },
   fileMeta: {
     fontSize: 12,
     color: "#64748b",
+    marginBottom: 4,
+  },
+  storageIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  storageText: {
+    fontSize: 10,
+    color: "#10b981",
+    fontWeight: "500",
+    marginLeft: 4,
+  },
+  rightSection: {
+    alignItems: 'flex-end',
+    gap: 8,
   },
   statusBadge: {
     flexDirection: 'row',
@@ -432,7 +567,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    marginLeft: 12,
   },
   statusIcon: {
     marginRight: 4,
@@ -440,6 +574,30 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     fontWeight: "600",
+  },
+  openFileButton: {
+    backgroundColor: "#eff6ff",
+    padding: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#2563eb",
+  },
+  storageInfo: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+  },
+  storagePathLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#6b7280",
+    marginBottom: 2,
+  },
+  storagePathText: {
+    fontSize: 10,
+    color: "#9ca3af",
+    fontFamily: 'monospace',
   },
   commentSection: {
     marginTop: 12,
