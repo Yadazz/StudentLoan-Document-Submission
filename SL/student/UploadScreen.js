@@ -153,7 +153,7 @@ const uploadFileToStorage = async (file, docId, userId, studentName, config) => 
     const fileExtension = file.filename.split('.').pop();
     
     // โครงสร้างใหม่: student_name/academic_year/term/document_id_timestamp.extension
-    const academicYear = config?.academicYear || "2567";
+    const academicYear = config?.academicYear || "2568";
     const term = config?.term || "1";
     const storagePath = `student_documents/${sanitizedStudentName}/${academicYear}/term_${term}/${docId}_${timestamp}.${fileExtension}`;
     
@@ -256,7 +256,7 @@ const uploadFileToStorage = async (file, docId, userId, studentName, config) => 
       ConsentFrom_mother();
     } else if (docId === 'guardian_income_cert' || docId === 'father_income_cert' || docId === 'mother_income_cert' || docId === 'single_parent_income_cert' || docId === 'famo_income_cert') {
       Income102();
-    } else if (docId === 'family_status_cert' || docId === 'family_status_required') {
+    } else if (docId === 'family_status_cert') {
       FamStatus_cert();
     } else if (downloadUrl) {
       // สำหรับเอกสารอื่นๆ ที่มีลิงก์ ให้เปิดลิงก์นั้น
@@ -272,22 +272,22 @@ const uploadFileToStorage = async (file, docId, userId, studentName, config) => 
     if (!data) return [];
     let documents = [];
     documents.push(
-      { id: 'form_101', title: 'แบบฟอร์ม กยศ. 101', description: 'กรอกข้อมูลตามจริงให้ครบถ้วน', required: true },
+      { id: 'form_101', title: 'แบบฟอร์ม กยศ. 101', description: 'กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร', required: true },
       { id: 'volunteer_doc', title: 'เอกสารจิตอาสา', description: 'กิจกรรมในปีการศึกษา 2567 อย่างน้อย 1 รายการ', required: true },
-      { id: 'consent_student_form', title: 'หนังสือยินยอมเปิดเผยข้อมูลของผู้กู้', required: true },
-      { id: 'id_copies_student', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของผู้กู้', required: true }
+      { id: 'consent_student_form', title: 'หนังสือยินยอมเปิดเผยข้อมูลของผู้กู้', description: 'กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร', required: true },
+      { id: 'id_copies_student', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของผู้กู้', description: 'บัตรประชาชนต้องไม่หมดอายุ', required: true }
     );
     if (data.familyStatus === "ก") {
       documents.push(
-        { id: 'consent_father_form', title: 'หนังสือยินยอมเปิดเผยข้อมูลของบิดา', required: true },
-        { id: 'id_copies_father', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของบิดา', required: true },
-        { id: 'consent_mother_form', title: 'หนังสือยินยอมเปิดเผยข้อมูลของมารดา', required: true },
-        { id: 'id_copies_mother', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของมารดา', required: true },
+        { id: 'consent_father_form', title: 'หนังสือยินยอมเปิดเผยข้อมูลของบิดา', description: 'กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร', required: true },
+        { id: 'id_copies_father', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของบิดา', description: 'บัตรประชาชนต้องไม่หมดอายุ', required: true },
+        { id: 'consent_mother_form', title: 'หนังสือยินยอมเปิดเผยข้อมูลของมารดา', description: 'กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร', required: true },
+        { id: 'id_copies_mother', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของมารดา', description: 'บัตรประชาชนต้องไม่หมดอายุ', required: true },
       );
 
       if (data.fatherIncome !== "มีรายได้ประจำ" && data.motherIncome !== "มีรายได้ประจำ") {
         documents.push(
-          { id: 'famo_income_cert', title: 'หนังสือรับรองรายได้ กยศ. 102 ของบิดา มารดา', required: true },
+          { id: 'famo_income_cert', title: 'หนังสือรับรองรายได้ กยศ. 102 ของบิดา มารดา', description: 'กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร', required: true },
           { id: 'famo_id_copies_gov', title: 'สำเนาบัตรข้าราชการผู้รับรอง', description: 'สำหรับรับรองรายได้ เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น', required: true }
         );
       } else {
@@ -295,7 +295,7 @@ const uploadFileToStorage = async (file, docId, userId, studentName, config) => 
           documents.push({ id: 'father_income', title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของบิดา', description: 'เอกสารอายุไม่เกิน 3 เดือน', required: true });
         } else {
           documents.push(
-            { id: 'father_income_cert', title: 'หนังสือรับรองรายได้ กยศ. 102 ของบิดา', required: true },
+            { id: 'father_income_cert', title: 'หนังสือรับรองรายได้ กยศ. 102 ของบิดา', description: 'กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร', required: true },
             { id: 'fa_id_copies_gov', title: 'สำเนาบัตรข้าราชการผู้รับรอง', description: 'สำหรับรับรองรายได้ เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น', required: true }
           );
         }
@@ -303,7 +303,7 @@ const uploadFileToStorage = async (file, docId, userId, studentName, config) => 
           documents.push({ id: 'mother_income', title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของมารดา', description: 'เอกสารอายุไม่เกิน 3 เดือน', required: true });
         } else {
           documents.push(
-            { id: 'mother_income_cert', title: 'หนังสือรับรองรายได้ กยศ. 102 ของมารดา', required: true },
+            { id: 'mother_income_cert', title: 'หนังสือรับรองรายได้ กยศ. 102 ของมารดา', description: 'กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร', required: true },
             { id: 'ma_id_copies_gov', title: 'สำเนาบัตรข้าราชการผู้รับรอง', description: 'สำหรับรับรองรายได้ เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น', required: true }
           );
         }
@@ -313,14 +313,14 @@ const uploadFileToStorage = async (file, docId, userId, studentName, config) => 
       let consentFormId = data.livingWith === "บิดา" ? 'consent_father_form' : 'consent_mother_form';
       
       documents.push(
-        { id: consentFormId, title: `หนังสือยินยอมเปิดเผยข้อมูลของ ${parent}`, required: true },
-        { id: `id_copies_${consentFormId}`, title: `สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของ ${parent}`, required: true }
+        { id: consentFormId, title: `หนังสือยินยอมเปิดเผยข้อมูลของ ${parent}`, description: 'กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร', required: true },
+        { id: `id_copies_${consentFormId}`, title: `สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้องของ ${parent}`, description: 'บัตรประชาชนต้องไม่หมดอายุ', required: true }
       );
       if (data.legalStatus === "มีเอกสาร") {
         documents.push({ id: 'legal_status', title: 'สำเนาใบหย่า (กรณีหย่าร้าง) หรือ สำเนาใบมรณบัตร (กรณีเสียชีวิต)', required: true });
       } else {
         documents.push(
-          { id: 'family_status_cert', title: 'หนังสือรับรองสถานภาพครอบครัว', required: true },
+          { id: 'family_status_cert', title: 'หนังสือรับรองสถานภาพครอบครัว', description: 'กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร', required: true },
           { id: 'fam_id_copies_gov', title: 'สำเนาบัตรข้าราชการผู้รับรอง', description: 'สำหรับรับรองสถานภาพครอบครัว เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น', required: true }
         );
       }
@@ -335,22 +335,22 @@ const uploadFileToStorage = async (file, docId, userId, studentName, config) => 
       }
     } else if (data.familyStatus === "ค") {
       documents.push(
-        { id: 'guardian_consent', title: 'หนังสือยินยอมเปิดเผยข้อมูล ของผู้ปกครอง', required: true },
-        { id: 'guardian_id_copies', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้อง ของผู้ปกครอง', required: true }
+        { id: 'guardian_consent', title: 'หนังสือยินยอมเปิดเผยข้อมูล ของผู้ปกครอง', description: 'กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร', required: true },
+        { id: 'guardian_id_copies', title: 'สำเนาบัตรประชาชนพร้อมรับรองสำเนาถูกต้อง ของผู้ปกครอง', description: 'บัตรประชาชนต้องไม่หมดอายุ', required: true }
       );
       if (data.guardianIncome === "มีรายได้ประจำ") {
-        documents.push({ id: 'guardian_income', title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของผู้ปกครอง', description: '(เอกสารอายุไม่เกิน 3 เดือน)', required: true });
+        documents.push({ id: 'guardian_income', title: 'หนังสือรับรองเงินเดือน หรือ สลิปเงินเดือน ของผู้ปกครอง', description: 'เอกสารอายุไม่เกิน 3 เดือน', required: true });
       } else {
         documents.push(
-          { id: 'guardian_income_cert', title: 'หนังสือรับรองรายได้ กยศ. 102 ของผู้ปกครอง', downloadUrl: 'https://drive.google.com/file/d/1ylB6AxaPg4qgvBqWWMwQ54LiLCkFTw1-/view?usp=drive_link', required: true },
+          { id: 'guardian_income_cert', title: 'หนังสือรับรองรายได้ กยศ. 102 ของผู้ปกครอง', description: 'กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร', required: true },
           { id: 'guar_id_copies_gov', title: 'สำเนาบัตรข้าราชการผู้รับรอง', description: 'สำหรับรับรองรายได้ เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น', required: true }
         );
       }
-      if (data.parentLegalStatus === "มีเอกสาร") {
-        documents.push({ id: 'parent_legal_status', title: 'สำเนาใบหย่า (กรณีหย่าร้าง) หรือ สำเนาใบมรณบัตร (กรณีเสียชีวิต)', description: '', required: true });
+      if (data.LegalStatus === "มีเอกสาร") {
+        documents.push({ id: 'legal_status', title: 'สำเนาใบหย่า (กรณีหย่าร้าง) หรือ สำเนาใบมรณบัตร (กรณีเสียชีวิต)', description: '', required: true });
       }
       documents.push(
-        { id: 'family_status_required', title: 'หนังสือรับรองสถานภาพครอบครัว', required: true },
+        { id: 'family_status_cert', title: 'หนังสือรับรองสถานภาพครอบครัว', description: 'กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร', required: true },
         { id: 'fam_id_copies_gov', title: 'สำเนาบัตรข้าราชการผู้รับรอง', description: 'สำหรับรับรองสถานภาพครอบครัว เอกสารจัดทำในปี พ.ศ. 2568 เท่านั้น', required: true }
       );
     }
@@ -572,9 +572,9 @@ const uploadFileToStorage = async (file, docId, userId, studentName, config) => 
         submittedAt: new Date().toISOString(),
         status: "submitted",
         documentStatuses: {},
-        academicYear: appConfig?.academicYear || "2567",
+        academicYear: appConfig?.academicYear || "2568",
         term: appConfig?.term || "1",
-        submissionTerm: `${appConfig?.academicYear || "2567"}_${appConfig?.term || "1"}` // เพิ่มฟิลด์นี้เพื่อง่ายต่อการ query
+        submissionTerm: `${appConfig?.academicYear || "2568"}_${appConfig?.term || "1"}` // เพิ่มฟิลด์นี้เพื่อง่ายต่อการ query
       };
 
       // กำหนดสถานะเริ่มต้นให้กับแต่ละเอกสาร
@@ -590,7 +590,7 @@ const uploadFileToStorage = async (file, docId, userId, studentName, config) => 
       console.log("บันทึกข้อมูลการส่งเอกสารลงฐานข้อมูล...");
 
       // บันทึกข้อมูลการส่งเอกสารใน collection ใหม่ (แยกตาม term)
-      const termCollectionName = `document_submissions_${appConfig?.academicYear || "2567"}_${appConfig?.term || "1"}`;
+      const termCollectionName = `document_submissions_${appConfig?.academicYear || "2568"}_${appConfig?.term || "1"}`;
       const submissionRef = doc(collection(db, termCollectionName), currentUser.uid);
       await setDoc(submissionRef, submissionData);
 
@@ -600,14 +600,14 @@ const uploadFileToStorage = async (file, docId, userId, studentName, config) => 
         lastSubmissionAt: new Date().toISOString(),
         hasSubmittedDocuments: true,
         uploads: storageUploads, // อัปเดตข้อมูล uploads ด้วย Storage URLs
-        lastSubmissionTerm: `${appConfig?.academicYear || "2567"}_${appConfig?.term || "1"}` // เก็บข้อมูลเทอมล่าสุดที่ส่ง
+        lastSubmissionTerm: `${appConfig?.academicYear || "2568"}_${appConfig?.term || "1"}` // เก็บข้อมูลเทอมล่าสุดที่ส่ง
       });
 
       console.log("บันทึกข้อมูลสำเร็จ");
 
       Alert.alert(
         "ส่งเอกสารสำเร็จ", 
-        `เอกสารของคุณได้ถูกส่งและอัปโหลดเรียบร้อยแล้ว\nปีการศึกษา: ${appConfig?.academicYear || "2567"} เทอม: ${appConfig?.term || "1"}\nคุณสามารถติดตามสถานะได้ในหน้าแสดงผล`, 
+        `เอกสารของคุณได้ถูกส่งและอัปโหลดเรียบร้อยแล้ว\nปีการศึกษา: ${appConfig?.academicYear || "2568"} เทอม: ${appConfig?.term || "1"}\nคุณสามารถติดตามสถานะได้ในหน้าแสดงผล`, 
         [{ 
           text: "ดูสถานะ", 
           onPress: () => {
