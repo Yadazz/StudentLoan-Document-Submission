@@ -76,52 +76,54 @@ const UploadScreen = ({ navigation, route }) => {
   };
 
   useEffect(() => {
-    const fetchSurveyData = async () => {
-      try {
-        setIsLoading(true);
-        const currentUser = auth.currentUser;
-
-        if (!currentUser) {
-          console.log("No user logged in, cannot fetch survey data.");
-          setSurveyData(null);
-          setIsLoading(false);
-          return;
-        }
-
-        // ดึง config ก่อน
-        await fetchAppConfig();
-
-        // เรียกข้อมูล Survey ของผู้ใช้จาก Firestore
-        const userSurveyRef = doc(db, 'users', currentUser.uid);
-        const userSurveyDoc = await getDoc(userSurveyRef);
-
-        if (userSurveyDoc.exists()) {
-          const userData = userSurveyDoc.data();
-          const surveyData = userData.survey;
-          setSurveyData(surveyData);
-          setSurveyDocId(userSurveyDoc.id);
-          
-          // โหลดข้อมูล uploads ที่มีอยู่ถ้ามี
-          if (userData.uploads) {
-            setUploads(userData.uploads);
-          }
-          
-          console.log("Survey data fetched:", surveyData);
-        } else {
-          console.log("No survey data found for this user.");
-          setSurveyData(null);
-          setSurveyDocId(null);
-        }
-      } catch (error) {
-        console.error("Error fetching survey data: ", error);
-        Alert.alert("Error", "Failed to load survey data.");
-        setSurveyData(null);
-      } finally {
+    const checkSubmissionStatus = async () => {
+      setIsLoading(true);
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
         setIsLoading(false);
+        return;
       }
+
+      // ดึง config ก่อน
+      const config = await fetchAppConfig();
+      const termCollectionName = `document_submissions_${config?.academicYear || "2567"}_${config?.term || "1"}`;
+      const submissionRef = doc(db, termCollectionName, currentUser.uid);
+      const submissionDoc = await getDoc(submissionRef);
+
+      if (submissionDoc.exists()) {
+        // ถ้ามีเอกสารแล้ว ให้ไปหน้า DocumentStatusScreen
+        navigation.replace('DocumentStatusScreen', {
+          submissionData: submissionDoc.data()
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // เรียกข้อมูล Survey ของผู้ใช้จาก Firestore
+      const userSurveyRef = doc(db, 'users', currentUser.uid);
+      const userSurveyDoc = await getDoc(userSurveyRef);
+
+      if (userSurveyDoc.exists()) {
+        const userData = userSurveyDoc.data();
+        const surveyData = userData.survey;
+        setSurveyData(surveyData);
+        setSurveyDocId(userSurveyDoc.id);
+        
+        // โหลดข้อมูล uploads ที่มีอยู่ถ้ามี
+        if (userData.uploads) {
+          setUploads(userData.uploads);
+        }
+        
+        console.log("Survey data fetched:", surveyData);
+      } else {
+        console.log("No survey data found for this user.");
+        setSurveyData(null);
+        setSurveyDocId(null);
+      }
+      setIsLoading(false);
     };
 
-    fetchSurveyData();
+    checkSubmissionStatus();
   }, []);
 
   // ฟังก์ชันสำหรับบันทึก uploads ไป Firebase
