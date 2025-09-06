@@ -24,7 +24,7 @@ const DocumentList = ({ documents, uploads, uploadProgress, handleFileUpload, ha
             || doc.id === 'guardian_consent' || doc.id === 'guardian_income_cert' 
             || doc.id === 'father_income_cert' || doc.id === 'mother_income_cert' 
             || doc.id === 'single_parent_income_cert' || doc.id === 'famo_income_cert'
-            || doc.id === 'family_status_cert' || doc.id === 'family_status_required'
+            || doc.id === 'family_status_cert'
             || doc.downloadUrl) && (
               <TouchableOpacity
                 onPress={() => handleDownloadDocument(doc.id, doc.downloadUrl)} // เรียกใช้ฟังก์ชันใหม่
