@@ -8,7 +8,6 @@ const SummaryCard = ({ surveyData }) => {
     motherIncome,
     legalStatus,
     guardianIncome,
-    parentLegalStatus
   } = surveyData;
 
   const getFamilyStatusLabel = (status) => {
@@ -80,7 +79,7 @@ const SummaryCard = ({ surveyData }) => {
             />
             <SummaryItem 
               label="เอกสารทางกฎหมาย" 
-              value={getDocumentLabel(parentLegalStatus)} 
+              value={getDocumentLabel(legalStatus)} 
             />
           </>
         )}
