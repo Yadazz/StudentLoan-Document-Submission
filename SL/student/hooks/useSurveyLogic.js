@@ -9,7 +9,7 @@ const useSurveyLogic = () => {
   const [motherIncome, setMotherIncome] = useState('');
   const [legalStatus, setLegalStatus] = useState('');
   const [guardianIncome, setGuardianIncome] = useState('');
-  const [parentLegalStatus, setParentLegalStatus] = useState('');
+
 
   // ฟังก์ชันรีเซ็ตค่าที่เกี่ยวข้อง
   const resetRelatedValues = () => {
@@ -18,7 +18,6 @@ const useSurveyLogic = () => {
     setMotherIncome('');
     setLegalStatus('');
     setGuardianIncome('');
-    setParentLegalStatus('');
   };
 
   // กำหนดขั้นตอนการนำทาง
@@ -53,7 +52,7 @@ const useSurveyLogic = () => {
       case 3:
         if (familyStatus === 'ก') return motherIncome !== '';
         if (familyStatus === 'ข') return legalStatus !== '';
-        if (familyStatus === 'ค') return parentLegalStatus !== '';
+        if (familyStatus === 'ค') return legalStatus !== '';
         return false;
       case 4:
         if (familyStatus === 'ข') {
@@ -74,7 +73,6 @@ const useSurveyLogic = () => {
     motherIncome,
     legalStatus,
     guardianIncome,
-    parentLegalStatus
   });
 
   return {
@@ -86,7 +84,6 @@ const useSurveyLogic = () => {
     motherIncome,
     legalStatus,
     guardianIncome,
-    parentLegalStatus,
     
     // Setters
     setStep,
@@ -96,7 +93,6 @@ const useSurveyLogic = () => {
     setMotherIncome,
     setLegalStatus,
     setGuardianIncome,
-    setParentLegalStatus,
     
     // Utility functions
     getNavigationSteps,
