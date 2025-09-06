@@ -1,4 +1,4 @@
-// UploadScreen.js (Main Component) - Updated with Firebase Storage
+// UploadScreen.js (Updated with Term-based Storage Structure)
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Platform, Dimensions, Image, ActivityIndicator } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
@@ -41,8 +41,39 @@ const UploadScreen = ({ navigation, route }) => {
   const [imageZoom, setImageZoom] = useState(1);
   const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // เพิ่ม state สำหรับติดตามการอัปโหลดแต่ละไฟล์
   const [storageUploadProgress, setStorageUploadProgress] = useState({});
+  
+  // เพิ่ม state สำหรับข้อมูล config
+  const [appConfig, setAppConfig] = useState(null);
+
+  // ฟังก์ชันใหม่สำหรับดึงข้อมูล config
+  const fetchAppConfig = async () => {
+    try {
+      const configRef = doc(db, 'DocumentService', 'config');
+      const configDoc = await getDoc(configRef);
+      
+      if (configDoc.exists()) {
+        const config = configDoc.data();
+        setAppConfig(config);
+        console.log("App config loaded:", config);
+        return config;
+      } else {
+        console.log("No config found, using default values");
+        // ค่าเริ่มต้นถ้าไม่พบ config
+        const defaultConfig = {
+          academicYear: "2567",
+          term: "1",
+          isEnabled: true,
+          immediateAccess: true
+        };
+        setAppConfig(defaultConfig);
+        return defaultConfig;
+      }
+    } catch (error) {
+      console.error("Error fetching app config:", error);
+      return null;
+    }
+  };
 
   useEffect(() => {
     const fetchSurveyData = async () => {
@@ -56,6 +87,9 @@ const UploadScreen = ({ navigation, route }) => {
           setIsLoading(false);
           return;
         }
+
+        // ดึง config ก่อน
+        await fetchAppConfig();
 
         // เรียกข้อมูล Survey ของผู้ใช้จาก Firestore
         const userSurveyRef = doc(db, 'users', currentUser.uid);
@@ -106,80 +140,87 @@ const UploadScreen = ({ navigation, route }) => {
     }
   };
 
-  // ฟังก์ชันใหม่สำหรับอัปโหลดไฟล์ไปยัง Firebase Storage
-  const uploadFileToStorage = async (file, docId, userId, studentName) => {
-    try {
-      console.log("Starting upload for:", file.filename);
-      
-      // สร้าง path สำหรับ Firebase Storage โดยใช้ชื่อนักเรียน
-      const sanitizedStudentName = studentName.replace(/[.#$[\]/\\]/g, '_').replace(/\s+/g, '_');
-      const timestamp = new Date().getTime();
-      const fileExtension = file.filename.split('.').pop();
-      const storagePath = `student_documents/${sanitizedStudentName}/${docId}_${timestamp}.${fileExtension}`;
-      
-      console.log("Storage path:", storagePath);
-      
-      // อ่านไฟล์เป็น blob
-      const response = await fetch(file.uri);
-      const blob = await response.blob();
-      
-      console.log("File converted to blob, size:", blob.size);
-      
-      // สร้าง reference ใน Storage
-      const storageRef = ref(storage, storagePath);
-      
-      // อัปโหลดพร้อมติดตาม progress
-      const uploadTask = uploadBytesResumable(storageRef, blob);
-      
-      return new Promise((resolve, reject) => {
-        uploadTask.on('state_changed',
-          (snapshot) => {
-            // คำนวณ progress
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            console.log(`Upload ${docId}: ${progress}% completed`);
+ // ฟังก์ชันใหม่สำหรับอัปโหลดไฟล์ไปยัง Firebase Storage (โครงสร้างใหม่: student_name/academic_year/term/)
+const uploadFileToStorage = async (file, docId, userId, studentName, config) => {
+  try {
+    console.log("Starting upload for:", file.filename);
+    
+    // สร้าง path ใหม่ที่เริ่มต้นด้วยชื่อนักเรียนก่อน
+    const sanitizedStudentName = studentName.replace(/[.#$[\]/\\]/g, '_').replace(/\s+/g, '_');
+    const timestamp = new Date().getTime();
+    const fileExtension = file.filename.split('.').pop();
+    
+    // โครงสร้างใหม่: student_name/academic_year/term/document_id_timestamp.extension
+    const academicYear = config?.academicYear || "2567";
+    const term = config?.term || "1";
+    const storagePath = `student_documents/${sanitizedStudentName}/${academicYear}/term_${term}/${docId}_${timestamp}.${fileExtension}`;
+    
+    console.log("New storage path (student-first):", storagePath);
+    
+    // อ่านไฟล์เป็น blob
+    const response = await fetch(file.uri);
+    const blob = await response.blob();
+    
+    console.log("File converted to blob, size:", blob.size);
+    
+    // สร้าง reference ใน Storage
+    const storageRef = ref(storage, storagePath);
+    
+    // อัปโหลดพร้อมติดตาม progress
+    const uploadTask = uploadBytesResumable(storageRef, blob);
+    
+    return new Promise((resolve, reject) => {
+      uploadTask.on('state_changed',
+        (snapshot) => {
+          // คำนวณ progress
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          console.log(`Upload ${docId}: ${progress}% completed`);
+          
+          // อัปเดท progress state
+          setStorageUploadProgress(prev => ({
+            ...prev,
+            [docId]: Math.round(progress)
+          }));
+        },
+        (error) => {
+          console.error("Upload error:", error);
+          reject(error);
+        },
+        async () => {
+          try {
+            // อัปโหลดเสร็จแล้ว ดึง download URL
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            console.log("Upload completed, URL:", downloadURL);
             
-            // อัปเดท progress state
-            setStorageUploadProgress(prev => ({
-              ...prev,
-              [docId]: Math.round(progress)
-            }));
-          },
-          (error) => {
-            console.error("Upload error:", error);
+            // ลบ progress state
+            setStorageUploadProgress(prev => {
+              const newState = { ...prev };
+              delete newState[docId];
+              return newState;
+            });
+            
+            resolve({
+              downloadURL,
+              storagePath,
+              uploadedAt: new Date().toISOString(),
+              originalFileName: file.filename,
+              fileSize: file.size,
+              mimeType: file.mimeType,
+              academicYear: academicYear,
+              term: term,
+              studentFolder: sanitizedStudentName // เพิ่มข้อมูลโฟลเดอร์นักเรียน
+            });
+          } catch (error) {
             reject(error);
-          },
-          async () => {
-            try {
-              // อัปโหลดเสร็จแล้ว ดึง download URL
-              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-              console.log("Upload completed, URL:", downloadURL);
-              
-              // ลบ progress state
-              setStorageUploadProgress(prev => {
-                const newState = { ...prev };
-                delete newState[docId];
-                return newState;
-              });
-              
-              resolve({
-                downloadURL,
-                storagePath,
-                uploadedAt: new Date().toISOString(),
-                originalFileName: file.filename,
-                fileSize: file.size,
-                mimeType: file.mimeType
-              });
-            } catch (error) {
-              reject(error);
-            }
           }
-        );
-      });
-    } catch (error) {
-      console.error("Error in uploadFileToStorage:", error);
-      throw error;
-    }
-  };
+        }
+      );
+    });
+  } catch (error) {
+    console.error("Error in uploadFileToStorage:", error);
+    throw error;
+  }
+};
 
   const deleteSurveyData = async () => {
     const currentUser = auth.currentUser;
@@ -200,7 +241,7 @@ const UploadScreen = ({ navigation, route }) => {
     }
   };
 
-    // ฟังก์ชันใหม่สำหรับจัดการการดาวน์โหลดเอกสาร เดี๋ยวต้องมาแก้ตรงนี้ถ้าทำเอกสารเพิ่มแล้ว
+  // ฟังก์ชันใหม่สำหรับจัดการการดาวน์โหลดเอกสาร เดี๋ยวต้องมาแก้ตรงนี้ถ้าทำเอกสารเพิ่มแล้ว
   const handleDownloadDocument = (docId, downloadUrl) => {
     if (docId === 'form_101') {
       // สำหรับแบบฟอร์ม กยศ.101 ให้เรียกใช้ฟังก์ชันสร้าง PDF
@@ -443,7 +484,7 @@ const UploadScreen = ({ navigation, route }) => {
     ]);
   };
 
-  // ฟังก์ชันส่งเอกสารที่อัปเดตใหม่พร้อม Firebase Storage
+  // ฟังก์ชันส่งเอกสารที่อัปเดตใหม่พร้อม Firebase Storage และ Term-based structure
   const handleSubmitDocuments = async () => {
     const documents = generateDocumentsList(surveyData);
     const requiredDocs = documents.filter(doc => doc.required);
@@ -494,11 +535,11 @@ const UploadScreen = ({ navigation, route }) => {
       
       console.log("Final student name for storage:", studentName);
 
-      // อัปโหลดแต่ละไฟล์ไปยัง Storage
+      // อัปโหลดแต่ละไฟล์ไปยัง Storage พร้อม config
       for (const [docId, file] of Object.entries(uploads)) {
         console.log(`เตรียมอัปโหลด: ${file.filename} (${docId})`);
         
-        const uploadPromise = uploadFileToStorage(file, docId, currentUser.uid, studentName)
+        const uploadPromise = uploadFileToStorage(file, docId, currentUser.uid, studentName, appConfig)
           .then((storageData) => {
             storageUploads[docId] = {
               ...file, // ข้อมูลเดิม
@@ -520,7 +561,7 @@ const UploadScreen = ({ navigation, route }) => {
       await Promise.all(uploadPromises);
       console.log("อัปโหลดไฟล์ทั้งหมดเสร็จสิ้น");
 
-      // สร้างข้อมูลส่งเอกสาร
+      // สร้างข้อมูลส่งเอกสาร พร้อมข้อมูล term และ academic year
       const submissionData = {
         userId: currentUser.uid,
         userEmail: currentUser.email,
@@ -528,7 +569,10 @@ const UploadScreen = ({ navigation, route }) => {
         uploads: storageUploads, // ใช้ข้อมูลที่มี Storage URLs
         submittedAt: new Date().toISOString(),
         status: "submitted",
-        documentStatuses: {}
+        documentStatuses: {},
+        academicYear: appConfig?.academicYear || "2567",
+        term: appConfig?.term || "1",
+        submissionTerm: `${appConfig?.academicYear || "2567"}_${appConfig?.term || "1"}` // เพิ่มฟิลด์นี้เพื่อง่ายต่อการ query
       };
 
       // กำหนดสถานะเริ่มต้นให้กับแต่ละเอกสาร
@@ -543,8 +587,9 @@ const UploadScreen = ({ navigation, route }) => {
 
       console.log("บันทึกข้อมูลการส่งเอกสารลงฐานข้อมูล...");
 
-      // บันทึกข้อมูลการส่งเอกสารใน collection ใหม่
-      const submissionRef = doc(collection(db, 'document_submissions'), currentUser.uid);
+      // บันทึกข้อมูลการส่งเอกสารใน collection ใหม่ (แยกตาม term)
+      const termCollectionName = `document_submissions_${appConfig?.academicYear || "2567"}_${appConfig?.term || "1"}`;
+      const submissionRef = doc(collection(db, termCollectionName), currentUser.uid);
       await setDoc(submissionRef, submissionData);
 
       // อัพเดทสถานะในข้อมูลผู้ใช้
@@ -552,14 +597,15 @@ const UploadScreen = ({ navigation, route }) => {
       await updateDoc(userRef, {
         lastSubmissionAt: new Date().toISOString(),
         hasSubmittedDocuments: true,
-        uploads: storageUploads // อัปเดตข้อมูล uploads ด้วย Storage URLs
+        uploads: storageUploads, // อัปเดตข้อมูล uploads ด้วย Storage URLs
+        lastSubmissionTerm: `${appConfig?.academicYear || "2567"}_${appConfig?.term || "1"}` // เก็บข้อมูลเทอมล่าสุดที่ส่ง
       });
 
       console.log("บันทึกข้อมูลสำเร็จ");
 
       Alert.alert(
         "ส่งเอกสารสำเร็จ", 
-        "เอกสารของคุณได้ถูกส่งและอัปโหลดเรียบร้อยแล้ว\nคุณสามารถติดตามสถานะได้ในหน้าแสดงผล", 
+        `เอกสารของคุณได้ถูกส่งและอัปโหลดเรียบร้อยแล้ว\nปีการศึกษา: ${appConfig?.academicYear || "2567"} เทอม: ${appConfig?.term || "1"}\nคุณสามารถติดตามสถานะได้ในหน้าแสดงผล`, 
         [{ 
           text: "ดูสถานะ", 
           onPress: () => {
@@ -635,6 +681,17 @@ const UploadScreen = ({ navigation, route }) => {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <UploadHeader surveyData={surveyData} onRetakeSurvey={handleRetakeSurvey} />
+      
+      {/* แสดงข้อมูล Academic Year และ Term */}
+      {appConfig && (
+        <View style={styles.termInfoCard}>
+          <Text style={styles.termInfoTitle}>ข้อมูลการส่งเอกสาร</Text>
+          <Text style={styles.termInfoText}>
+            ปีการศึกษา: {appConfig.academicYear} • เทอม: {appConfig.term}
+          </Text>
+        </View>
+      )}
+      
       <UploadProgress stats={stats} />
       
       {/* แสดง Storage Upload Progress ถ้ามี */}
@@ -719,6 +776,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#eef2ff',
     padding: 16,
     paddingBottom: 40,
+  },
+  termInfoCard: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3b82f6',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  termInfoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  termInfoText: {
+    fontSize: 14,
+    color: '#64748b',
   },
   submitButton: {
     backgroundColor: '#10b981',
