@@ -13,6 +13,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { db, auth } from '../database/firebase';
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { ref as storageRef, deleteObject } from "firebase/storage";
+import { storage } from '../database/firebase';
+import { deleteDoc, updateDoc } from 'firebase/firestore';
 
 const DocumentStatusScreen = ({ route, navigation }) => {
   const [submissionData, setSubmissionData] = useState(null);
@@ -323,6 +326,55 @@ const DocumentStatusScreen = ({ route, navigation }) => {
     }
   };
 
+  // ฟังก์ชันลบเอกสารออกจาก Storage และ Firestore
+  const handleDeleteSubmission = async () => {
+    Alert.alert(
+      "ลบเอกสารทั้งหมด",
+      "คุณต้องการลบเอกสารทั้งหมดและทำใหม่หรือไม่? เอกสารจะถูกลบออกจากระบบทันที",
+      [
+        { text: "ยกเลิก", style: "cancel" },
+        {
+          text: "ลบทั้งหมด",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setIsLoading(true);
+              // ลบไฟล์ใน Storage ทีละไฟล์
+              if (submissionData?.uploads) {
+                for (const file of Object.values(submissionData.uploads)) {
+                  if (file.storagePath) {
+                    try {
+                      await deleteObject(storageRef(storage, file.storagePath));
+                    } catch (err) {
+                      // ถ้าไฟล์ไม่มีใน storage ก็ข้าม
+                    }
+                  }
+                }
+              }
+              // ลบ document submission ใน Firestore
+              const collectionName = `document_submissions_${submissionData?.academicYear || "2567"}_${submissionData?.term || "1"}`;
+              await deleteDoc(doc(db, collectionName, submissionData.userId));
+              // อัพเดท users collection
+              await updateDoc(doc(db, 'users', submissionData.userId), {
+                hasSubmittedDocuments: false,
+                uploads: {},
+                lastSubmissionAt: null,
+                lastSubmissionTerm: null
+              });
+              Alert.alert("ลบสำเร็จ", "คุณสามารถทำรายการใหม่ได้แล้ว");
+              // navigation.navigate("HomeScreen");
+              navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
+            } catch (error) {
+              Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถลบเอกสารได้");
+            } finally {
+              setIsLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   // ฟังก์ชันแสดงรายการเอกสารที่อัปโหลด
   const renderUploadedDocs = () => {
     if (!submissionData?.uploads || Object.keys(submissionData.uploads).length === 0) {
@@ -541,6 +593,15 @@ const DocumentStatusScreen = ({ route, navigation }) => {
         >
           <Ionicons name="home-outline" size={20} color="#ffffff" />
           <Text style={styles.homeButtonText}>กลับไปหน้าหลัก</Text>
+        </TouchableOpacity>
+
+        {/* ปุ่มลบเอกสาร */}
+        <TouchableOpacity
+          style={[styles.homeButton, { backgroundColor: "#ef4444" }]}
+          onPress={handleDeleteSubmission}
+        >
+          <Ionicons name="trash-outline" size={20} color="#fff" />
+          <Text style={styles.homeButtonText}>ลบเอกสารทั้งหมด</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
