@@ -26,6 +26,48 @@ const calculateAnnualIncome = (monthlyIncome) => {
   }
 };
 
+// ฟังก์ชันการวาดข้อความที่มีการเลื่อนตำแหน่ง x และ y ตามการคำนวณระยะห่าง
+function drawTextWithCharacterSpacing(page, text, x, y, font, size) {
+      let currentX = x;
+
+      // อักษรที่มีวรรณยุกต์ที่ต้องการปรับตำแหน่ง
+      const accentChars = ["่", "้", "๊", "๋"];
+      // อักษรที่มีสระ อิ, อี, อึ, อื
+      const vowelChars = ["ิ", "ี", "ึ", "ื", "ั"];
+
+      // กำหนดการเลื่อนตำแหน่ง y สำหรับตัวอักษรที่มีวรรณยุกต์และสระ
+      const accentShift = 1; // ปรับตำแหน่ง y สำหรับวรรณยุกต์
+      const vowelShift = 0.5;  // ปรับตำแหน่ง y สำหรับตัวอักษรที่มีสระ
+      const extraAccentShift = 3; // การเลื่อนตำแหน่ง y สำหรับวรรณยุกต์ที่ต้องการให้สูงมากขึ้นเมื่อมีสระ
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text.charAt(i); // ดึงตัวอักษรทีละตัว
+        
+        // ตรวจสอบว่ามีสระหรือไม่
+        const hasVowel = vowelChars.some(vowel => text.includes(vowel));
+        
+        // กำหนดตำแหน่ง y สำหรับตัวอักษรที่มีวรรณยุกต์หรือสระ
+        let adjustedY = y;
+
+        if (accentChars.some(accent => char.includes(accent))) {
+          if (hasVowel) {
+            adjustedY += accentShift + extraAccentShift;  // ถ้ามีสระเลื่อนตำแหน่ง y ของวรรณยุกต์มากขึ้น
+          } else {
+            adjustedY += accentShift;  // ถ้าไม่มีสระ เลื่อนตามปกติ
+          }
+        } else if (vowelChars.some(vowel => char.includes(vowel))) {
+          adjustedY += vowelShift;  // ปรับตำแหน่ง y สำหรับตัวอักษรที่มีสระ
+        }
+
+        // วาดตัวอักษร
+        page.drawText(char, { x: currentX, y: adjustedY, size: size, font: font });
+
+        // คำนวณความกว้างของตัวอักษรและเลื่อนไปตามนั้น
+        const charWidth = font.widthOfTextAtSize(char, size);
+        currentX += charWidth; // เลื่อนไปตามขนาดตัวอักษร
+      }
+    }
+
 // ฟังก์ชันสร้าง PDF (แยกออกมาเพื่อให้โค้ดหลักสะอาดขึ้น)
 async function fillPdf(userData, existingPdfBytes, fontBytes) {
   if (Platform.OS === "web") {
@@ -70,7 +112,8 @@ const nameWithoutPrefix = removePrefix(fullName);
     if(userData.survey.guardianIncome === "มีรายได้ไม่ประจำ"){
     firstPage.drawText(userData.guardian_info.name || "-", { x: 294.4, y: 322, size: 10, font: customFont });
     firstPage.drawText(userData.guardian_info.occupation || "-", { x: 123.84, y: 305.8, size: 10, font: customFont });
-    firstPage.drawText(userData.guardian_info.workplace.name || "-", { x: 282.96, y: 305.8, size: 10, font: customFont });
+    //firstPage.drawText(userData.guardian_info.workplace.name || "-", { x: 282.96, y: 305.8, size: 10, font: customFont });
+    drawTextWithCharacterSpacing(firstPage, userData.guardian_info.workplace.name, 282.96, 305.8, customFont, 10);
     firstPage.drawText(userData.guardian_info.workplace.house_no || "-", { x: 447.10, y: 305.8, size: 10, font: customFont });
     firstPage.drawText(userData.guardian_info.workplace.moo || "-", { x: 511.2, y: 305.8, size: 10, font: customFont });
     firstPage.drawText(userData.guardian_info.workplace.soi || "-", { x: 108.72, y: 290, size: 10, font: customFont });
