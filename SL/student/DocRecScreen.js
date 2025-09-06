@@ -26,7 +26,6 @@ const DocRecScreen = () => {
     motherIncome,
     legalStatus,
     guardianIncome,
-    parentLegalStatus,
     
     // Setters
     setStep,
@@ -36,7 +35,6 @@ const DocRecScreen = () => {
     setMotherIncome,
     setLegalStatus,
     setGuardianIncome,
-    setParentLegalStatus,
     
     // Utility functions
     getNavigationSteps,
@@ -113,7 +111,7 @@ const DocRecScreen = () => {
           };
         } else if (familyStatus === 'ข') {
           return {
-            question: "3. คุณมีสำเนาใบหย่า หรือ สำเนาใบมรณบัตรหรือไม่?",
+            question: "3. คุณมีสำเนาใบหย่า หรือ สำเนาใบมรณบัตรของบิดามารดาหรือไม่?",
             options: [
               { value: 'มีเอกสาร', label: 'มีเอกสาร' },
               { value: 'ไม่มีเอกสาร', label: 'ไม่มีเอกสาร' }
@@ -128,8 +126,8 @@ const DocRecScreen = () => {
               { value: 'มีเอกสาร', label: 'มีเอกสาร' },
               { value: 'ไม่มีเอกสาร', label: 'ไม่มีเอกสาร' }
             ],
-            selectedValue: parentLegalStatus,
-            onSelect: setParentLegalStatus
+            selectedValue: legalStatus,
+            onSelect: setLegalStatus
           };
         }
         break;
