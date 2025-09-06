@@ -12,14 +12,124 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { db, auth } from '../database/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 
 const DocumentStatusScreen = ({ route, navigation }) => {
   const [submissionData, setSubmissionData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [appConfig, setAppConfig] = useState(null);
+  const [availableTerms, setAvailableTerms] = useState([]);
+  const [selectedTerm, setSelectedTerm] = useState(null);
 
-  // ดึงข้อมูลจาก Firebase
+  // ฟังก์ชันดึง config และ term ที่มีอยู่
+  const fetchAppConfig = async () => {
+    try {
+      const configRef = doc(db, 'DocumentService', 'config');
+      const configDoc = await getDoc(configRef);
+      
+      if (configDoc.exists()) {
+        const config = configDoc.data();
+        setAppConfig(config);
+        
+        // สร้าง current term identifier
+        const currentTerm = `${config.academicYear}_${config.term}`;
+        setSelectedTerm(currentTerm);
+        
+        console.log("App config loaded:", config);
+        console.log("Current term:", currentTerm);
+        return config;
+      } else {
+        // ใช้ค่าเริ่มต้นถ้าไม่พบ config
+        const defaultConfig = {
+          academicYear: "2567",
+          term: "1",
+          isEnabled: true
+        };
+        setAppConfig(defaultConfig);
+        setSelectedTerm("2567_1");
+        return defaultConfig;
+      }
+    } catch (error) {
+      console.error("Error fetching app config:", error);
+      return null;
+    }
+  };
+
+  // ฟังก์ชันค้นหา terms ที่มีข้อมูลผู้ใช้
+  const findAvailableTerms = async (userId) => {
+    try {
+      const terms = [];
+      
+      // ค้นหา collections ที่เริ่มด้วย "document_submissions_"
+      // หมายเหตุ: Firebase ไม่สามารถ list collections ได้โดยตรง
+      // วิธีนี้จะตรวจสอบ terms ที่เป็นไปได้ตามรูปแบบ
+      
+      // ลองค้นหา terms ที่เป็นไปได้ (ปี 2566-2570, เทอม 1-3)
+      const possibleYears = ['2566', '2567', '2568', '2569', '2570'];
+      const possibleTerms = ['1', '2', '3'];
+      
+      for (const year of possibleYears) {
+        for (const term of possibleTerms) {
+          try {
+            const termId = `${year}_${term}`;
+            const collectionName = `document_submissions_${termId}`;
+            const userDocRef = doc(db, collectionName, userId);
+            const userDoc = await getDoc(userDocRef);
+            
+            if (userDoc.exists()) {
+              terms.push({
+                id: termId,
+                year: year,
+                term: term,
+                collectionName: collectionName,
+                displayName: `ปี ${year} เทอม ${term}`,
+                data: userDoc.data()
+              });
+            }
+          } catch (error) {
+            // ไม่ต้องแสดง error สำหรับ collection ที่ไม่มี
+            continue;
+          }
+        }
+      }
+      
+      console.log("Available terms found:", terms);
+      setAvailableTerms(terms);
+      
+      return terms;
+    } catch (error) {
+      console.error("Error finding available terms:", error);
+      return [];
+    }
+  };
+
+  // ฟังก์ชันดึงข้อมูลการส่งเอกสารจาก term ที่เลือก
+  const fetchSubmissionDataFromTerm = async (termId, userId) => {
+    try {
+      if (!termId) return null;
+      
+      const collectionName = `document_submissions_${termId}`;
+      console.log("Fetching from collection:", collectionName);
+      
+      const submissionRef = doc(db, collectionName, userId);
+      const submissionDoc = await getDoc(submissionRef);
+
+      if (submissionDoc.exists()) {
+        const data = submissionDoc.data();
+        console.log("Submission data loaded from term:", termId, data);
+        return data;
+      } else {
+        console.log("No submission found in term:", termId);
+        return null;
+      }
+    } catch (error) {
+      console.error("Error fetching submission data from term:", termId, error);
+      return null;
+    }
+  };
+
+  // ฟังก์ชันดึงข้อมูลหลัก
   const fetchSubmissionData = async () => {
     try {
       const currentUser = auth.currentUser;
@@ -29,23 +139,52 @@ const DocumentStatusScreen = ({ route, navigation }) => {
         return;
       }
 
-      const submissionRef = doc(db, 'document_submissions', currentUser.uid);
-      const submissionDoc = await getDoc(submissionRef);
+      // ดึง config ก่อน
+      const config = await fetchAppConfig();
+      if (!config) return;
 
-      if (submissionDoc.exists()) {
-        const data = submissionDoc.data();
-        setSubmissionData(data);
-        console.log("Submission data loaded:", data);
-      } else {
-        // ถ้าไม่มีข้อมูลใน Firebase ให้ใช้ข้อมูลจาก route params
-        const { surveyData, uploads, submissionData: routeSubmissionData } = route.params || {};
-        if (routeSubmissionData) {
-          setSubmissionData(routeSubmissionData);
+      // ค้นหา terms ที่มีข้อมูล
+      const terms = await findAvailableTerms(currentUser.uid);
+      
+      if (terms.length === 0) {
+        // ถ้าไม่มีข้อมูลใน term-based collections ให้ลองดูใน collection เดิม
+        const oldSubmissionRef = doc(db, 'document_submissions', currentUser.uid);
+        const oldSubmissionDoc = await getDoc(oldSubmissionRef);
+        
+        if (oldSubmissionDoc.exists()) {
+          const data = oldSubmissionDoc.data();
+          setSubmissionData(data);
+          console.log("Loaded data from old collection:", data);
         } else {
-          Alert.alert("ไม่พบข้อมูล", "ไม่พบข้อมูลการส่งเอกสาร");
-          navigation.goBack();
-          return;
+          // ใช้ข้อมูลจาก route params ถ้ามี
+          const { surveyData, uploads, submissionData: routeSubmissionData } = route.params || {};
+          if (routeSubmissionData) {
+            setSubmissionData(routeSubmissionData);
+            console.log("Using data from route params:", routeSubmissionData);
+          } else {
+            Alert.alert("ไม่พบข้อมูล", "ไม่พบข้อมูลการส่งเอกสาร");
+            navigation.goBack();
+            return;
+          }
         }
+      } else {
+        // ใช้ข้อมูลจาก term ปัจจุบันหรือ term แรกที่พบ
+        const currentTermId = `${config.academicYear}_${config.term}`;
+        let dataToUse = null;
+        
+        // หาข้อมูลจาก term ปัจจุบันก่อน
+        const currentTermData = terms.find(t => t.id === currentTermId);
+        if (currentTermData) {
+          dataToUse = currentTermData.data;
+          setSelectedTerm(currentTermId);
+        } else {
+          // ถ้าไม่มีใน term ปัจจุบัน ให้ใช้ term ล่าสุด
+          const latestTerm = terms[terms.length - 1];
+          dataToUse = latestTerm.data;
+          setSelectedTerm(latestTerm.id);
+        }
+        
+        setSubmissionData(dataToUse);
       }
     } catch (error) {
       console.error("Error fetching submission data:", error);
@@ -64,6 +203,33 @@ const DocumentStatusScreen = ({ route, navigation }) => {
     setRefreshing(true);
     await fetchSubmissionData();
     setRefreshing(false);
+  };
+
+  // ฟังก์ชันเปลี่ยน term
+  const handleTermChange = async (termId) => {
+    if (!termId || termId === selectedTerm) return;
+    
+    setIsLoading(true);
+    const currentUser = auth.currentUser;
+    
+    if (currentUser) {
+      const termData = availableTerms.find(t => t.id === termId);
+      if (termData) {
+        setSubmissionData(termData.data);
+        setSelectedTerm(termId);
+      } else {
+        // ดึงข้อมูลใหม่จาก Firebase
+        const data = await fetchSubmissionDataFromTerm(termId, currentUser.uid);
+        if (data) {
+          setSubmissionData(data);
+          setSelectedTerm(termId);
+        } else {
+          Alert.alert("ไม่พบข้อมูล", `ไม่พบข้อมูลในเทอมที่เลือก`);
+        }
+      }
+    }
+    
+    setIsLoading(false);
   };
 
   // ฟังก์ชันกำหนดสีและไอคอนตามสถานะ
