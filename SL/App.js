@@ -11,7 +11,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 
 // Import all screens
 import HomeScreen from "./student/HomeScreen";
-import UploadScreen from "./student/UploadScreen";
+import UploadScreen from "./student/UploadScreen/UploadScreen";
 import SettingsScreen from "./student/SettingScreen";
 import DocRecScreen from "./student/DocRecScreen/DocRecScreen";
 import NewsContent from "./student/NewsContent";
@@ -76,6 +76,21 @@ const UploadStack = () => {
       <Stack.Screen
         name="UploadMain"
         component={isEnabled ? UploadScreen : DocCooldown}
+      />
+      <Stack.Screen
+        name="DocumentStatusScreen"
+        component={DocumentStatusScreen}
+        options={{
+          title: "สถานะเอกสาร",
+          headerShown: true,
+          headerStyle: {
+            backgroundColor: "#2563eb",
+          },
+          headerTintColor: "#ffffff",
+          headerTitleStyle: {
+            fontWeight: "bold",
+          },
+        }}
       />
     </Stack.Navigator>
   );
@@ -169,7 +184,7 @@ const App = () => {
             component={DocumentStatusScreen}
             options={{
               title: "สถานะเอกสาร",
-              headerShown: true,
+              headerShown: false,
               headerStyle: {
                 backgroundColor: "#2563eb",
               },
