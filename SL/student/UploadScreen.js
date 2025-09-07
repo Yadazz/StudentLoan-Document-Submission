@@ -1,11 +1,11 @@
 // UploadScreen.js (Complete with redesigned UI matching DocumentStatusScreen)
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Platform, Dimensions, Image, ActivityIndicator } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { db, auth } from '../database/firebase';
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, deleteField, getDocs, query, deleteDoc } from 'firebase/firestore';
 // เพิ่ม import สำหรับ Firebase Storage
 import { storage } from '../database/firebase';
 import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
@@ -226,16 +226,16 @@ const UploadScreen = ({ navigation, route }) => {
   };
 
   const deleteSurveyData = async () => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
       console.log("No user to delete survey data.");
       return;
     }
     try {
       const userSurveyRef = doc(db, 'users', currentUser.uid);
       await updateDoc(userSurveyRef, {
-        survey: {},
-        uploads: {}
+        survey: deleteField(), // ลบฟิลด์ survey
+        uploads: deleteField() // ลบฟิลด์ uploads
       });
       console.log("Survey data successfully deleted from Firestore!");
     } catch (error) {
