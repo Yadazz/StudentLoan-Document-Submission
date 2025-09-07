@@ -311,6 +311,7 @@ const DocumentStatusScreen = ({ route, navigation }) => {
         }
       } else if (file.uri) {
         // ถ้ามีแค่ local URI (กรณีเก่า)
+        const Sharing = await import("expo-sharing");
         const isAvailable = await Sharing.isAvailableAsync();
         if (!isAvailable) {
           Alert.alert("ไม่สามารถเปิดไฟล์ได้", "อุปกรณ์ของคุณไม่รองรับการเปิดไฟล์นี้");
@@ -326,7 +327,7 @@ const DocumentStatusScreen = ({ route, navigation }) => {
     }
   };
 
-  // ฟังก์ชันลบเอกสารออกจาก Storage และ Firestore
+  // Updated: ฟังก์ชันลบเอกสารออกจาก Storage และ Firestore สำหรับหลายไฟล์
   const handleDeleteSubmission = async () => {
     Alert.alert(
       "ลบเอกสารทั้งหมด",
@@ -339,21 +340,31 @@ const DocumentStatusScreen = ({ route, navigation }) => {
           onPress: async () => {
             try {
               setIsLoading(true);
-              // ลบไฟล์ใน Storage ทีละไฟล์
+              
+              // ลบไฟล์ใน Storage ทีละไฟล์ (รองรับ multiple files)
               if (submissionData?.uploads) {
-                for (const file of Object.values(submissionData.uploads)) {
-                  if (file.storagePath) {
-                    try {
-                      await deleteObject(storageRef(storage, file.storagePath));
-                    } catch (err) {
-                      // ถ้าไฟล์ไม่มีใน storage ก็ข้าม
+                for (const [docId, files] of Object.entries(submissionData.uploads)) {
+                  // ตรวจสอบว่าเป็น array หรือ single file
+                  const fileList = Array.isArray(files) ? files : [files];
+                  
+                  for (const file of fileList) {
+                    if (file.storagePath) {
+                      try {
+                        await deleteObject(storageRef(storage, file.storagePath));
+                        console.log(`Deleted file: ${file.storagePath}`);
+                      } catch (err) {
+                        console.warn(`Failed to delete file: ${file.storagePath}`, err);
+                        // ถ้าไฟล์ไม่มีใน storage ก็ข้าม
+                      }
                     }
                   }
                 }
               }
+              
               // ลบ document submission ใน Firestore
               const collectionName = `document_submissions_${submissionData?.academicYear || "2567"}_${submissionData?.term || "1"}`;
               await deleteDoc(doc(db, collectionName, submissionData.userId));
+              
               // อัพเดท users collection
               await updateDoc(doc(db, 'users', submissionData.userId), {
                 hasSubmittedDocuments: false,
@@ -361,10 +372,12 @@ const DocumentStatusScreen = ({ route, navigation }) => {
                 lastSubmissionAt: null,
                 lastSubmissionTerm: null
               });
+              
               Alert.alert("ลบสำเร็จ", "คุณสามารถทำรายการใหม่ได้แล้ว");
-              // navigation.navigate("HomeScreen");
               navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
+              
             } catch (error) {
+              console.error("Error deleting submission:", error);
               Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถลบเอกสารได้");
             } finally {
               setIsLoading(false);
@@ -375,7 +388,7 @@ const DocumentStatusScreen = ({ route, navigation }) => {
     );
   };
 
-  // ฟังก์ชันแสดงรายการเอกสารที่อัปโหลด
+  // Updated: ฟังก์ชันแสดงรายการเอกสารที่อัปโหลด (รองรับ multiple files)
   const renderUploadedDocs = () => {
     if (!submissionData?.uploads || Object.keys(submissionData.uploads).length === 0) {
       return (
@@ -386,74 +399,101 @@ const DocumentStatusScreen = ({ route, navigation }) => {
       );
     }
 
-    return Object.entries(submissionData.uploads).map(([docId, file]) => {
-      const docStatus = submissionData.documentStatuses?.[docId]?.status || file.status || "pending";
+    return Object.entries(submissionData.uploads).map(([docId, filesData]) => {
+      // รองรับทั้ง single file และ multiple files
+      const files = Array.isArray(filesData) ? filesData : [filesData];
+      const docStatus = submissionData.documentStatuses?.[docId]?.status || files[0]?.status || "pending";
       const statusInfo = getStatusInfo(docStatus);
       const reviewComments = submissionData.documentStatuses?.[docId]?.comments || "";
-      const isStorageFile = file.storageUploaded && file.downloadURL;
 
       return (
-        <View key={docId} style={styles.fileCard}>
-          <View style={styles.fileHeader}>
-            <View style={styles.fileInfo}>
-              <Ionicons 
-                name={isStorageFile ? "cloud-outline" : "document-text-outline"} 
-                size={24} 
-                color="#2563eb" 
-              />
-              <View style={styles.fileDetails}>
-                <Text style={styles.fileName} numberOfLines={1}>
-                  {file.originalFileName || file.filename}
-                </Text>
-                <View style={styles.fileMetaContainer}>
-                  <Text style={styles.fileMeta}>
-                    {formatFileSize(file.fileSize || file.size)} • 
-                    {file.uploadedAt ? 
-                      new Date(file.uploadedAt).toLocaleString('th-TH') : 
-                      (file.uploadDate || "ไม่ทราบเวลา")
-                    }
-                  </Text>
-                  {isStorageFile && (
-                    <View style={styles.storageIndicator}>
-                      <Ionicons name="cloud-done-outline" size={14} color="#10b981" />
-                      <Text style={styles.storageText}>Cloud Storage</Text>
-                    </View>
-                  )}
-                </View>
+        <View key={docId} style={styles.documentCard}>
+          {/* Document header */}
+          <View style={styles.documentHeader}>
+            <View style={styles.documentTitleContainer}>
+              <Ionicons name="folder-outline" size={24} color="#2563eb" />
+              <Text style={styles.documentTitle}>
+                {getDocumentDisplayName(docId)}
+              </Text>
+              <View style={styles.filesCountBadge}>
+                <Text style={styles.filesCountText}>{files.length} ไฟล์</Text>
               </View>
             </View>
             
-            <View style={styles.rightSection}>
-              <View style={[styles.statusBadge, { backgroundColor: statusInfo.bgColor }]}>
-                <Ionicons 
-                  name={statusInfo.icon} 
-                  size={16} 
-                  color={statusInfo.color} 
-                  style={styles.statusIcon} 
-                />
-                <Text style={[styles.statusText, { color: statusInfo.textColor }]}>
-                  {statusInfo.text}
-                </Text>
-              </View>
-              
-              {/* ปุ่มเปิดไฟล์ */}
-              <TouchableOpacity
-                style={styles.openFileButton}
-                onPress={() => handleOpenStorageFile(file)}
-              >
-                <Ionicons name="eye-outline" size={16} color="#2563eb" />
-              </TouchableOpacity>
+            <View style={[styles.statusBadge, { backgroundColor: statusInfo.bgColor }]}>
+              <Ionicons 
+                name={statusInfo.icon} 
+                size={16} 
+                color={statusInfo.color} 
+                style={styles.statusIcon} 
+              />
+              <Text style={[styles.statusText, { color: statusInfo.textColor }]}>
+                {statusInfo.text}
+              </Text>
             </View>
           </View>
 
-          {/* แสดงข้อมูล Storage Path ถ้ามี */}
-          {file.storagePath && (
-            <View style={styles.storageInfo}>
-              <Text style={styles.storagePathLabel}>Storage Path:</Text>
-              <Text style={styles.storagePathText} numberOfLines={1}>{file.storagePath}</Text>
-            </View>
-          )}
+          {/* Files list */}
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.filesScrollContainer}
+          >
+            {files.map((file, index) => {
+              const isStorageFile = file.storageUploaded && file.downloadURL;
+              
+              return (
+                <View key={`${docId}_${index}`} style={styles.fileItem}>
+                  <TouchableOpacity
+                    style={styles.filePreview}
+                    onPress={() => handleOpenStorageFile(file)}
+                  >
+                    <View style={styles.fileIconContainer}>
+                      <Ionicons 
+                        name={getFileIcon(file.mimeType, file.originalFileName || file.filename)} 
+                        size={24} 
+                        color="#2563eb" 
+                      />
+                      {isStorageFile && (
+                        <View style={styles.cloudIndicator}>
+                          <Ionicons name="cloud-done" size={12} color="#10b981" />
+                        </View>
+                      )}
+                    </View>
+                    
+                    <Text style={styles.fileIndex}>#{index + 1}</Text>
+                  </TouchableOpacity>
+                  
+                  <View style={styles.fileDetails}>
+                    <Text style={styles.fileName} numberOfLines={1}>
+                      {file.originalFileName || file.filename}
+                    </Text>
+                    <Text style={styles.fileSize}>
+                      {formatFileSize(file.fileSize || file.size)}
+                    </Text>
+                    
+                    {/* OCR validation indicator */}
+                    {file.ocrValidated && (
+                      <View style={styles.ocrValidatedIndicator}>
+                        <Ionicons name="shield-checkmark" size={10} color="#10b981" />
+                        <Text style={styles.ocrValidatedText}>OCR ✓</Text>
+                      </View>
+                    )}
+                    
+                    {/* Upload date */}
+                    <Text style={styles.uploadDate}>
+                      {file.uploadedAt ? 
+                        new Date(file.uploadedAt).toLocaleDateString('th-TH') : 
+                        (file.uploadDate || "")
+                      }
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
 
+          {/* Review comments */}
           {reviewComments ? (
             <View style={styles.commentSection}>
               <Text style={styles.commentLabel}>หมายเหตุจากเจ้าหน้าที่:</Text>
@@ -465,18 +505,69 @@ const DocumentStatusScreen = ({ route, navigation }) => {
     });
   };
 
-  // คำนวณสถิติเอกสาร
+  // Helper function to get document display name
+  const getDocumentDisplayName = (docId) => {
+    const docNames = {
+      'form_101': 'แบบฟอร์ม 101',
+      'consent_student_form': 'หนังสือยินยอมนักศึกษา',
+      'consent_father_form': 'หนังสือยินยอมบิดา',
+      'consent_mother_form': 'หนังสือยินยอมมารดา',
+      'guardian_income_cert': 'หนังสือรับรองรายได้ผู้ปกครอง',
+      'father_income_cert': 'หนังสือรับรองรายได้บิดา',
+      'mother_income_cert': 'หนังสือรับรองรายได้มารดา',
+      'single_parent_income_cert': 'หนังสือรับรองรายได้ผู้ปกครองเดียว',
+      'famo_income_cert': 'หนังสือรับรองรายได้บิดามารดา',
+      'family_status_cert': 'หนังสือรับรองสถานภาพครอบครัว',
+      // เพิ่มรายการอื่นๆ ตามต้องการ
+    };
+    return docNames[docId] || docId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  // Helper function to get file icon
+  const getFileIcon = (mimeType, filename) => {
+    const type = mimeType?.toLowerCase() || "";
+    const name = filename?.toLowerCase() || "";
+
+    if (type.startsWith("image/") || name.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/)) {
+      return "image";
+    } else if (type.includes("pdf") || name.endsWith(".pdf")) {
+      return "document-text";
+    } else if (type.includes("word") || name.match(/\.(doc|docx)$/)) {
+      return "document";
+    } else if (type.includes("excel") || name.match(/\.(xls|xlsx)$/)) {
+      return "grid";
+    } else if (type.includes("text") || name.match(/\.(txt|json)$/)) {
+      return "document-text-outline";
+    } else {
+      return "document-outline";
+    }
+  };
+
+  // Updated: คำนวณสถิติเอกสาร (รองรับ multiple files)
   const getDocumentStats = () => {
     if (!submissionData?.documentStatuses && !submissionData?.uploads) {
-      return { pending: 0, approved: 0, rejected: 0, uploaded: 0, total: 0 };
+      return { pending: 0, approved: 0, rejected: 0, uploaded: 0, total: 0, totalFiles: 0 };
     }
 
-    // ใช้ documentStatuses ถ้ามี ถ้าไม่มีให้ใช้สถานะจาก uploads
     let statuses = [];
+    let totalFiles = 0;
+
     if (submissionData.documentStatuses) {
       statuses = Object.values(submissionData.documentStatuses);
     } else if (submissionData.uploads) {
-      statuses = Object.values(submissionData.uploads).map(file => ({ status: file.status || "pending" }));
+      statuses = Object.values(submissionData.uploads).map(filesData => {
+        const files = Array.isArray(filesData) ? filesData : [filesData];
+        totalFiles += files.length;
+        return { status: files[0]?.status || "pending" };
+      });
+    }
+
+    // Count total files if not already counted
+    if (totalFiles === 0 && submissionData.uploads) {
+      totalFiles = Object.values(submissionData.uploads).reduce((sum, filesData) => {
+        const files = Array.isArray(filesData) ? filesData : [filesData];
+        return sum + files.length;
+      }, 0);
     }
 
     return {
@@ -484,7 +575,8 @@ const DocumentStatusScreen = ({ route, navigation }) => {
       approved: statuses.filter(doc => doc.status === "approved").length,
       rejected: statuses.filter(doc => doc.status === "rejected").length,
       uploaded: statuses.filter(doc => doc.status === "uploaded_to_storage").length,
-      total: statuses.length
+      total: statuses.length,
+      totalFiles: totalFiles
     };
   };
 
@@ -559,7 +651,9 @@ const DocumentStatusScreen = ({ route, navigation }) => {
           </View>
         </View>
         <View style={styles.totalContainer}>
-          <Text style={styles.totalText}>รวม {stats.total} เอกสาร</Text>
+          <Text style={styles.totalText}>
+            รวม {stats.total} เอกสาร • {stats.totalFiles} ไฟล์
+          </Text>
         </View>
       </View>
 
@@ -677,17 +771,6 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     textAlign: 'center',
   },
-  userInfoContainer: {
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  studentNameInfo: {
-    fontSize: 13,
-    color: "#6b7280",
-    fontWeight: "500",
-    marginTop: 2,
-    textAlign: 'center',
-  },
   overallStatusCard: {
     backgroundColor: "#fff",
     padding: 20,
@@ -750,55 +833,47 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: "#1e293b",
   },
-  fileCard: {
+  
+  // New styles for multiple files support
+  documentCard: {
     marginBottom: 16,
     padding: 16,
     borderRadius: 12,
     backgroundColor: "#f8fafc",
     borderLeftWidth: 4,
-    borderLeftColor: "#e2e8f0",
+    borderLeftColor: "#2563eb",
   },
-  fileHeader: {
+  documentHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  fileInfo: {
-    flexDirection: 'row',
-    flex: 1,
-    alignItems: 'flex-start',
-  },
-  fileDetails: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  fileName: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#1e293b",
-    marginBottom: 4,
-  },
-  fileMetaContainer: {
-    flexDirection: 'column',
-  },
-  fileMeta: {
-    fontSize: 12,
-    color: "#64748b",
-    marginBottom: 4,
-  },
-  storageIndicator: {
+  documentTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
-  storageText: {
+  documentTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+    marginLeft: 8,
+    marginRight: 8,
+    flex: 1,
+  },
+  filesCountBadge: {
+    backgroundColor: "#eff6ff",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#2563eb",
+  },
+  filesCountText: {
     fontSize: 10,
-    color: "#10b981",
-    fontWeight: "500",
-    marginLeft: 4,
-  },
-  rightSection: {
-    alignItems: 'flex-end',
-    gap: 8,
+    color: "#2563eb",
+    fontWeight: "600",
   },
   statusBadge: {
     flexDirection: 'row',
@@ -814,29 +889,79 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
-  openFileButton: {
-    backgroundColor: "#eff6ff",
-    padding: 8,
-    borderRadius: 20,
+  filesScrollContainer: {
+    maxHeight: 120,
+    marginBottom: 12,
+  },
+  fileItem: {
+    backgroundColor: "#fff",
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#2563eb",
+    borderColor: "#e2e8f0",
+    marginRight: 12,
+    padding: 10,
+    minWidth: 120,
+    alignItems: 'center',
   },
-  storageInfo: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
+  filePreview: {
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  storagePathLabel: {
-    fontSize: 11,
-    fontWeight: "600",
+  fileIconContainer: {
+    backgroundColor: "#eff6ff",
+    padding: 12,
+    borderRadius: 8,
+    position: 'relative',
+    marginBottom: 4,
+  },
+  cloudIndicator: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: "#d1fae5",
+    borderRadius: 8,
+    padding: 2,
+  },
+  fileIndex: {
+    fontSize: 10,
     color: "#6b7280",
-    marginBottom: 2,
+    fontWeight: "500",
   },
-  storagePathText: {
+  fileDetails: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  fileName: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#374151",
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  fileSize: {
     fontSize: 10,
     color: "#9ca3af",
-    fontFamily: 'monospace',
+    marginBottom: 2,
+  },
+  ocrValidatedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: "#d1fae5",
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 2,
+  },
+  ocrValidatedText: {
+    fontSize: 8,
+    color: "#065f46",
+    fontWeight: "600",
+    marginLeft: 2,
+  },
+  uploadDate: {
+    fontSize: 9,
+    color: "#9ca3af",
+    textAlign: 'center',
   },
   commentSection: {
     marginTop: 12,
@@ -865,12 +990,11 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   actionSection: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 12,
     marginBottom: 30,
   },
   refreshButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -887,10 +1011,9 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   spinning: {
-    // Add animation here if needed
+    // Add rotation animation if needed
   },
   homeButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
