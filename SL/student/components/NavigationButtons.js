@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 
 const NavigationButtons = ({ 
@@ -7,6 +8,37 @@ const NavigationButtons = ({
   onNext, 
   isLastStep = false 
 }) => {
+  const [countdown, setCountdown] = useState(0);
+  const [isCompleted, setIsCompleted] = useState(false);
+
+  useEffect(() => {
+    if (isLastStep && countdown === 0 && !isCompleted) {
+      setCountdown(10); // Start countdown when reaching the last step
+    }
+
+    if (isLastStep && countdown > 0) {
+      const timer = setInterval(() => {
+        setCountdown(prevCountdown => {
+          if (prevCountdown === 1) {
+            clearInterval(timer);  // Clear the interval when countdown reaches 0
+            setIsCompleted(true);  // Enable the "เสร็จสิ้น" button after countdown
+          }
+          return prevCountdown - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);  // Clean up the timer on component unmount
+    }
+  }, [countdown, isLastStep, isCompleted]);
+
+  const handleNext = () => {
+    if (isLastStep && isCompleted) {
+      onNext();  // Go to the next screen after countdown is complete
+    } else {
+      onNext(); // If not last step, proceed to the next screen immediately
+    }
+  };
+
   return (
     <View style={styles.navigationContainer}>
       <TouchableOpacity 
@@ -18,15 +50,12 @@ const NavigationButtons = ({
       </TouchableOpacity>
       
       <TouchableOpacity 
-        style={[
-          styles.nextButton, 
-          !canGoNext && styles.nextButtonDisabled
-        ]} 
-        onPress={onNext} 
-        disabled={!canGoNext}
+        style={[styles.nextButton, !canGoNext && styles.nextButtonDisabled]} 
+        onPress={handleNext} 
+        disabled={!canGoNext || (isLastStep && countdown > 0)}
       >
         <Text style={styles.nextButtonText}>
-          {isLastStep ? "เสร็จสิ้น" : "ถัดไป"}
+          {isLastStep ? (countdown > 0 ? `เสร็จสิ้น (${countdown}s)` : "เสร็จสิ้น") : "ถัดไป"}
         </Text>
       </TouchableOpacity>
     </View>
