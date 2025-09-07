@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -7,14 +7,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "./database/firebase";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { doc, onSnapshot } from "firebase/firestore";
 
 // Import all screens
 import HomeScreen from "./student/HomeScreen";
 import UploadScreen from "./student/UploadScreen";
 import SettingsScreen from "./student/SettingScreen";
-import DocRecScreen from "./student/DocRecScreen";
+import DocRecScreen from "./student/DocRecScreen/DocRecScreen";
 import NewsContent from "./student/NewsContent";
 import ProfileScreen from "./student/ProfileScreen";
 import LoginScreen from "./LoginScreen";
