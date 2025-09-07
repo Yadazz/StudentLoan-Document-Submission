@@ -1,4 +1,4 @@
-// UploadScreen.js (Main component - refactored with OCR validation)
+// UploadScreen.js (Main component - Updated for multiple files per document)
 import { useState, useEffect } from "react";
 import {
   View,
@@ -44,11 +44,13 @@ const UploadScreen = ({ navigation, route }) => {
   const [surveyData, setSurveyData] = useState(null);
   const [surveyDocId, setSurveyDocId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [uploads, setUploads] = useState({});
+  // Updated: Change uploads structure to support multiple files per document
+  const [uploads, setUploads] = useState({}); // Format: { docId: [file1, file2, ...] }
   const [uploadProgress, setUploadProgress] = useState({});
   const [showFileModal, setShowFileModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedDocTitle, setSelectedDocTitle] = useState("");
+  const [selectedFileIndex, setSelectedFileIndex] = useState(0); // New: Track which file in array
   const [fileContent, setFileContent] = useState(null);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [contentType, setContentType] = useState("");
@@ -136,7 +138,18 @@ const UploadScreen = ({ navigation, route }) => {
         setSurveyDocId(userSurveyDoc.id);
 
         if (userData.uploads) {
-          setUploads(userData.uploads);
+          // Convert old format to new format if needed
+          const convertedUploads = {};
+          Object.keys(userData.uploads).forEach(docId => {
+            const upload = userData.uploads[docId];
+            if (Array.isArray(upload)) {
+              convertedUploads[docId] = upload;
+            } else {
+              // Convert single file to array format
+              convertedUploads[docId] = [upload];
+            }
+          });
+          setUploads(convertedUploads);
         }
       } else {
         setSurveyData(null);
@@ -184,11 +197,11 @@ const UploadScreen = ({ navigation, route }) => {
         showValidationAlert(
           validationResult,
           () => {
-            console.log("✓ OCR Validation passed for", file.filename);
+            console.log("✓ OCR Validation passed for", file.name);
             resolve(true);
           },
           () => {
-            console.log("✗ OCR Validation failed for", file.filename);
+            console.log("✗ OCR Validation failed for", file.name);
             resolve(false);
           }
         );
@@ -217,6 +230,7 @@ const UploadScreen = ({ navigation, route }) => {
   const uploadFileToStorage = async (
     file,
     docId,
+    fileIndex,
     userId,
     studentName,
     config
@@ -226,11 +240,11 @@ const UploadScreen = ({ navigation, route }) => {
         .replace(/[.#$[\]/\\]/g, "_")
         .replace(/\s+/g, "_");
       const timestamp = new Date().getTime();
-      const fileExtension = file.filename.split(".").pop();
+      const fileExtension = file.filename?.split(".").pop() || 'unknown';
 
       const academicYear = config?.academicYear || "2568";
       const term = config?.term || "1";
-      const storagePath = `student_documents/${sanitizedStudentName}/${academicYear}/term_${term}/${docId}_${timestamp}.${fileExtension}`;
+      const storagePath = `student_documents/${sanitizedStudentName}/${academicYear}/term_${term}/${docId}_${fileIndex}_${timestamp}.${fileExtension}`;
 
       const response = await fetch(file.uri);
       const blob = await response.blob();
@@ -246,7 +260,7 @@ const UploadScreen = ({ navigation, route }) => {
               (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
             setStorageUploadProgress((prev) => ({
               ...prev,
-              [docId]: Math.round(progress),
+              [`${docId}_${fileIndex}`]: Math.round(progress),
             }));
           },
           (error) => {
@@ -258,7 +272,7 @@ const UploadScreen = ({ navigation, route }) => {
               const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
               setStorageUploadProgress((prev) => {
                 const newState = { ...prev };
-                delete newState[docId];
+                delete newState[`${docId}_${fileIndex}`];
                 return newState;
               });
 
@@ -266,7 +280,7 @@ const UploadScreen = ({ navigation, route }) => {
                 downloadURL,
                 storagePath,
                 uploadedAt: new Date().toISOString(),
-                originalFileName: file.filename,
+                originalFileName: file.filename || file.name || 'unknown',
                 fileSize: file.size,
                 mimeType: file.mimeType,
                 academicYear: academicYear,
@@ -290,7 +304,7 @@ const UploadScreen = ({ navigation, route }) => {
     const currentUser = auth.currentUser;
     if (!currentUser) return;
     try {
-      const userSurveyRef = doc(db, "users", currentUser.uid);
+      const userRef = doc(db, "users", currentUser.uid);
       await updateDoc(userRef, {
         survey: deleteField(),
         uploads: deleteField(),
@@ -332,69 +346,137 @@ const UploadScreen = ({ navigation, route }) => {
     });
   };
 
-  // Handle file upload with OCR validation
-  const handleFileUpload = async (docId) => {
+  // Updated: Handle multiple file upload with OCR validation
+  const handleFileUpload = async (docId, allowMultiple = true) => {
     try {
       const DocumentPicker = await import("expo-document-picker");
       const result = await DocumentPicker.getDocumentAsync({
         type: "*/*",
         copyToCacheDirectory: true,
+        multiple: allowMultiple, // Enable multiple selection
       });
+      
       if (result.canceled) return;
-      const file = result.assets[0];
 
-      // Check if this is a Form 101 document that needs OCR validation
-      if (docId === "form_101") {
-        const isValid = await performOCRValidation(file, docId);
-        if (!isValid) {
-          return; // Stop upload if validation fails
+      const files = result.assets; // This is now an array
+      const validatedFiles = [];
+
+      // Process each file
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // Check if this is a Form 101 document that needs OCR validation
+        if (docId === "form_101") {
+          const isValid = await performOCRValidation(file, docId);
+          if (!isValid) {
+            continue; // Skip this file if validation fails
+          }
         }
-      }
 
-      const newUploads = {
-        ...uploads,
-        [docId]: {
+        // Add file metadata
+        const fileWithMetadata = {
           filename: file.name,
           uri: file.uri,
           mimeType: file.mimeType,
           size: file.size,
           uploadDate: new Date().toLocaleString("th-TH"),
           status: "pending",
-          ocrValidated: docId === "form_101", // Mark if OCR validated
-        },
+          ocrValidated: docId === "form_101",
+          fileIndex: (uploads[docId] || []).length + validatedFiles.length, // Sequential index
+        };
+
+        validatedFiles.push(fileWithMetadata);
+      }
+
+      if (validatedFiles.length === 0) {
+        return; // No valid files to add
+      }
+
+      // Update uploads state with new files
+      const newUploads = {
+        ...uploads,
+        [docId]: [...(uploads[docId] || []), ...validatedFiles],
       };
 
       setUploads(newUploads);
       await saveUploadsToFirebase(newUploads);
+
+      // Show success message
+      Alert.alert(
+        "อัปโหลดสำเร็จ",
+        `อัปโหลดไฟล์ ${validatedFiles.length} ไฟล์สำเร็จ`,
+        [{ text: "ตกลง" }]
+      );
+
     } catch (error) {
       Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถเลือกไฟล์ได้");
       console.error(error);
     }
   };
 
-  // Handle remove file
-  const handleRemoveFile = async (docId) => {
-    Alert.alert("ลบไฟล์", "คุณต้องการลบไฟล์นี้หรือไม่?", [
-      { text: "ยกเลิก", style: "cancel" },
-      {
-        text: "ลบ",
-        style: "destructive",
-        onPress: async () => {
-          const newUploads = { ...uploads };
-          delete newUploads[docId];
-          setUploads(newUploads);
-          await saveUploadsToFirebase(newUploads);
-          handleCloseModal();
-        },
-      },
-    ]);
+  // Updated: Handle remove specific file from document
+  const handleRemoveFile = async (docId, fileIndex = null) => {
+    const docFiles = uploads[docId] || [];
+    
+    if (fileIndex !== null && fileIndex >= 0 && fileIndex < docFiles.length) {
+      // Remove specific file
+      Alert.alert(
+        "ลบไฟล์",
+        `คุณต้องการลบไฟล์ "${docFiles[fileIndex].filename}" หรือไม่?`,
+        [
+          { text: "ยกเลิก", style: "cancel" },
+          {
+            text: "ลบ",
+            style: "destructive",
+            onPress: async () => {
+              const newFiles = docFiles.filter((_, index) => index !== fileIndex);
+              
+              const newUploads = { ...uploads };
+              if (newFiles.length === 0) {
+                delete newUploads[docId];
+              } else {
+                // Re-index remaining files
+                newFiles.forEach((file, index) => {
+                  file.fileIndex = index;
+                });
+                newUploads[docId] = newFiles;
+              }
+              
+              setUploads(newUploads);
+              await saveUploadsToFirebase(newUploads);
+              handleCloseModal();
+            },
+          },
+        ]
+      );
+    } else {
+      // Remove all files for this document
+      Alert.alert(
+        "ลบไฟล์ทั้งหมด",
+        `คุณต้องการลบไฟล์ทั้งหมด (${docFiles.length} ไฟล์) สำหรับเอกสารนี้หรือไม่?`,
+        [
+          { text: "ยกเลิก", style: "cancel" },
+          {
+            text: "ลบทั้งหมด",
+            style: "destructive",
+            onPress: async () => {
+              const newUploads = { ...uploads };
+              delete newUploads[docId];
+              setUploads(newUploads);
+              await saveUploadsToFirebase(newUploads);
+              handleCloseModal();
+            },
+          },
+        ]
+      );
+    }
   };
 
-  // Handle submit documents
+  // Updated: Handle submit documents with multiple files
   const handleSubmitDocuments = async () => {
     const documents = generateDocumentsList(surveyData);
     const requiredDocs = documents.filter((doc) => doc.required);
-    const uploadedRequiredDocs = requiredDocs.filter((doc) => uploads[doc.id]);
+    const uploadedRequiredDocs = requiredDocs.filter((doc) => uploads[doc.id] && uploads[doc.id].length > 0);
 
     if (uploadedRequiredDocs.length < requiredDocs.length) {
       Alert.alert(
@@ -437,32 +519,42 @@ const UploadScreen = ({ navigation, route }) => {
         console.error("Error fetching user name:", error);
       }
 
-      for (const [docId, file] of Object.entries(uploads)) {
-        const uploadPromise = uploadFileToStorage(
-          file,
-          docId,
-          currentUser.uid,
-          studentName,
-          appConfig
-        )
-          .then((storageData) => {
-            storageUploads[docId] = {
-              ...file,
-              ...storageData,
-              storageUploaded: true,
-              status: "uploaded_to_storage",
-            };
-          })
-          .catch((error) => {
-            throw new Error(
-              `ไม่สามารถอัปโหลดไฟล์ ${file.filename} ได้: ${error.message}`
-            );
-          });
+      // Upload all files for each document
+      for (const [docId, files] of Object.entries(uploads)) {
+        const uploadedFiles = [];
+        
+        for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+          const file = files[fileIndex];
+          const uploadPromise = uploadFileToStorage(
+            file,
+            docId,
+            fileIndex,
+            currentUser.uid,
+            studentName,
+            appConfig
+          )
+            .then((storageData) => {
+              uploadedFiles.push({
+                ...file,
+                ...storageData,
+                storageUploaded: true,
+                status: "uploaded_to_storage",
+                fileIndex,
+              });
+            })
+            .catch((error) => {
+              throw new Error(
+                `ไม่สามารถอัปโหลดไฟล์ ${file.filename} ได้: ${error.message}`
+              );
+            });
 
-        uploadPromises.push(uploadPromise);
+          uploadPromises.push(uploadPromise);
+        }
+        
+        // Wait for all files in this document to upload before adding to storageUploads
+        await Promise.all(uploadPromises.slice(-files.length));
+        storageUploads[docId] = uploadedFiles;
       }
-
-      await Promise.all(uploadPromises);
 
       const submissionData = {
         userId: currentUser.uid,
@@ -479,12 +571,14 @@ const UploadScreen = ({ navigation, route }) => {
         }`,
       };
 
+      // Initialize document statuses
       Object.keys(storageUploads).forEach((docId) => {
         submissionData.documentStatuses[docId] = {
           status: "pending",
           reviewedAt: null,
           reviewedBy: null,
           comments: "",
+          fileCount: storageUploads[docId].length,
         };
       });
 
@@ -507,16 +601,21 @@ const UploadScreen = ({ navigation, route }) => {
         }`,
       });
 
+      // Count total files submitted
+      const totalFiles = Object.values(storageUploads).reduce(
+        (sum, files) => sum + files.length, 0
+      );
+
       Alert.alert(
         "ส่งเอกสารสำเร็จ",
-        `เอกสารของคุณได้ถูกส่งและอัปโหลดเรียบร้อยแล้ว\nปีการศึกษา: ${
+        `เอกสารของคุณได้ถูกส่งและอัปโหลดเรียบร้อยแล้ว\nจำนวนไฟล์: ${totalFiles} ไฟล์\nปีการศึกษา: ${
           appConfig?.academicYear || "2568"
         } เทอม: ${appConfig?.term || "1"}\nคุณสามารถติดตามได้ในหน้าแสดงผล`,
         [
           {
             text: "ดูสถานะ",
             onPress: () => {
-              navigation.navigate("DocumentStatusScreen", {
+              navigation.push("DocumentStatusScreen", {
                 surveyData: surveyData,
                 uploads: storageUploads,
                 submissionData: submissionData,
@@ -537,16 +636,17 @@ const UploadScreen = ({ navigation, route }) => {
     }
   };
 
-  // Modal handlers
-  const handleShowFileModal = async (docId, docTitle) => {
-    const file = uploads[docId];
-    if (file) {
-      setSelectedFile(file);
-      setSelectedDocTitle(docTitle);
+  // Updated: Modal handlers for multiple files
+  const handleShowFileModal = async (docId, docTitle, fileIndex = 0) => {
+    const files = uploads[docId];
+    if (files && files[fileIndex]) {
+      setSelectedFile(files[fileIndex]);
+      setSelectedDocTitle(`${docTitle} (${fileIndex + 1}/${files.length})`);
+      setSelectedFileIndex(fileIndex);
       setShowFileModal(true);
       setIsLoadingContent(true);
       try {
-        await loadFileContent(file);
+        await loadFileContent(files[fileIndex]);
       } catch (error) {
         console.error("Error loading file content:", error);
         Alert.alert("ข้อผิดพลาด", "ไม่สามารถโหลดเนื้อหาไฟล์ได้");
@@ -606,6 +706,7 @@ const UploadScreen = ({ navigation, route }) => {
     setShowFileModal(false);
     setSelectedFile(null);
     setSelectedDocTitle("");
+    setSelectedFileIndex(0);
     setFileContent(null);
     setContentType("");
     setIsLoadingContent(false);
@@ -632,17 +733,22 @@ const UploadScreen = ({ navigation, route }) => {
     }
   };
 
-  // Utility functions
+  // Updated: Utility functions for multiple files
   const getUploadStats = () => {
     const documents = generateDocumentsList(surveyData);
     const requiredDocs = documents.filter((doc) => doc.required);
-    const uploadedDocs = documents.filter((doc) => uploads[doc.id]);
-    const uploadedRequiredDocs = requiredDocs.filter((doc) => uploads[doc.id]);
+    const uploadedDocs = documents.filter((doc) => uploads[doc.id] && uploads[doc.id].length > 0);
+    const uploadedRequiredDocs = requiredDocs.filter((doc) => uploads[doc.id] && uploads[doc.id].length > 0);
+    
+    // Count total files
+    const totalFiles = Object.values(uploads).reduce((sum, files) => sum + files.length, 0);
+    
     return {
       total: documents.length,
       required: requiredDocs.length,
       uploaded: uploadedDocs.length,
       uploadedRequired: uploadedRequiredDocs.length,
+      totalFiles: totalFiles,
     };
   };
 
@@ -718,6 +824,16 @@ const UploadScreen = ({ navigation, route }) => {
         setImageZoom={setImageZoom}
         setImagePosition={setImagePosition}
         loadFileContent={loadFileContent}
+        // New props for multiple files navigation
+        selectedFileIndex={selectedFileIndex}
+        totalFiles={uploads[selectedFile?.docId]?.length || 0}
+        onNavigateFile={(direction) => {
+          const currentDocFiles = uploads[selectedFile?.docId] || [];
+          const newIndex = direction === 'next' 
+            ? Math.min(selectedFileIndex + 1, currentDocFiles.length - 1)
+            : Math.max(selectedFileIndex - 1, 0);
+          handleShowFileModal(selectedFile?.docId, selectedDocTitle.split(' (')[0], newIndex);
+        }}
       />
     </ScrollView>
   );
