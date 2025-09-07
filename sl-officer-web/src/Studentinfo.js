@@ -477,76 +477,34 @@ export default function StudentInfo() {
       "สำนักวิชาเทคโนโลยีสังคม",
     ],
     majors: {
-      "สำนักวิชาวิศวกรรมศาสตร์": [
+      สำนักวิชาวิศวกรรมศาสตร์: [
         "วิศวกรรมคอมพิวเตอร์",
         "วิศวกรรมไฟฟ้า",
         "วิศวกรรมโยธา",
       ],
-      "สำนักวิชาวิทยาศาสตร์": ["คณิตศาสตร์", "ฟิสิกส์", "เคมี"],
-      "สำนักวิชาเทคโนโลยีสังคม": ["เทคโนโลยีสารสนเทศ", "นิเทศศาสตร์"],
+      สำนักวิชาวิทยาศาสตร์: ["คณิตศาสตร์", "ฟิสิกส์", "เคมี"],
+      สำนักวิชาเทคโนโลยีสังคม: ["เทคโนโลยีสารสนเทศ", "นิเทศศาสตร์"],
     },
     locations: {
       นครราชสีมา: {
-        "เมืองนครราชสีมา": [
+        เมืองนครราชสีมา: [
           "ในเมือง",
           "หัวทะเล",
           "โพธิ์กลาง",
           "หนองจะบก",
           "หนองไผ่ล้อม",
         ],
-        ปากช่อง: [
-          "ปากช่อง",
-          "หนองสาหร่าย",
-          "กลางดง",
-          "จันทึก",
-          "วังไทร",
-        ],
-        พิมาย: [
-          "ในเมือง",
-          "กระชอน",
-          "ท่าหลวง",
-          "รังกาใหญ่",
-          "ชีวาน",
-        ],
-        สีคิ้ว: [
-          "สีคิ้ว",
-          "บ้านหัน",
-          "กุดน้อย",
-          "หนองบัวน้อย",
-          "มิตรภาพ",
-        ],
+        ปากช่อง: ["ปากช่อง", "หนองสาหร่าย", "กลางดง", "จันทึก", "วังไทร"],
+        พิมาย: ["ในเมือง", "กระชอน", "ท่าหลวง", "รังกาใหญ่", "ชีวาน"],
+        สีคิ้ว: ["สีคิ้ว", "บ้านหัน", "กุดน้อย", "หนองบัวน้อย", "มิตรภาพ"],
       },
       ขอนแก่น: {
-        "เมืองขอนแก่น": [
-          "ในเมือง",
-          "บ้านเป็ด",
-          "ศิลา",
-          "บ้านทุ่ม",
-          "สำราญ",
-        ],
-        น้ำพอง: [
-          "น้ำพอง",
-          "วังชัย",
-          "ท่ากระเสริม",
-          "หนองกุง",
-          "บัวเงิน",
-        ],
-        ชุมแพ: [
-          "ชุมแพ",
-          "โนนหัน",
-          "นาหนองทุ่ม",
-          "หนองไผ่",
-          "ไชยสอ",
-        ],
+        เมืองขอนแก่น: ["ในเมือง", "บ้านเป็ด", "ศิลา", "บ้านทุ่ม", "สำราญ"],
+        น้ำพอง: ["น้ำพอง", "วังชัย", "ท่ากระเสริม", "หนองกุง", "บัวเงิน"],
+        ชุมแพ: ["ชุมแพ", "โนนหัน", "นาหนองทุ่ม", "หนองไผ่", "ไชยสอ"],
       },
       สุรินทร์: {
-        "เมืองสุรินทร์": [
-          "ในเมือง",
-          "นอกเมือง",
-          "แสลงพันธ์",
-          "เฉนียง",
-          "ตั้งใจ",
-        ],
+        เมืองสุรินทร์: ["ในเมือง", "นอกเมือง", "แสลงพันธ์", "เฉนียง", "ตั้งใจ"],
         ปราสาท: ["กังแอน", "ทุ่งมน", "ไพล", "สมุด", "โคกยาง"],
         ศีขรภูมิ: ["ระแงง", "หนองขวาว", "ตรึม", "แตล", "หนองบัว"],
       },
@@ -562,9 +520,15 @@ export default function StudentInfo() {
         .join("")}`;
     },
     randomAddress: () => {
-      const province = randomHelpers.randomFromArray(Object.keys(randomHelpers.locations));
-      const district = randomHelpers.randomFromArray(Object.keys(randomHelpers.locations[province]));
-      const subDistrict = randomHelpers.randomFromArray(randomHelpers.locations[province][district]);
+      const province = randomHelpers.randomFromArray(
+        Object.keys(randomHelpers.locations)
+      );
+      const district = randomHelpers.randomFromArray(
+        Object.keys(randomHelpers.locations[province])
+      );
+      const subDistrict = randomHelpers.randomFromArray(
+        randomHelpers.locations[province][district]
+      );
       return {
         house_no: randomHelpers.randomNumber(1, 999).toString(),
         moo: randomHelpers.randomNumber(1, 12).toString(),
@@ -588,12 +552,27 @@ export default function StudentInfo() {
   // เพิ่มฟังก์ชันสุ่มข้อมูลนักศึกษา (เฉพาะ text field, survey เป็น null)
   const generateRandomData = () => {
     const randomSchool = randomHelpers.randomFromArray(randomHelpers.schools);
-    const randomMajor = randomHelpers.randomFromArray(randomHelpers.majors[randomSchool]);
+    const randomMajor = randomHelpers.randomFromArray(
+      randomHelpers.majors[randomSchool]
+    );
     setFormData({
-      name: `${randomHelpers.randomFromArray(randomHelpers.thaiFirstNames)} ${randomHelpers.randomFromArray(randomHelpers.thaiLastNames)}`,
-      nickname: randomHelpers.randomFromArray(["นิด", "หน่อย", "ต้น", "บี", "เอ", "แบงค์", "มด"]),
+      name: `${randomHelpers.randomFromArray(
+        randomHelpers.thaiFirstNames
+      )} ${randomHelpers.randomFromArray(randomHelpers.thaiLastNames)}`,
+      nickname: randomHelpers.randomFromArray([
+        "นิด",
+        "หน่อย",
+        "ต้น",
+        "บี",
+        "เอ",
+        "แบงค์",
+        "มด",
+      ]),
       student_id: `B${randomHelpers.randomNumber(6000000, 6999999)}`,
-      citizen_id: Array(13).fill(0).map(() => randomHelpers.randomNumber(0, 9)).join(""),
+      citizen_id: Array(13)
+        .fill(0)
+        .map(() => randomHelpers.randomNumber(0, 9))
+        .join(""),
       phone_num: randomHelpers.randomPhoneNumber(),
       email: `b${randomHelpers.randomNumber(6000000, 6999999)}@g.sut.ac.th`,
       school: randomSchool,
@@ -602,28 +581,58 @@ export default function StudentInfo() {
       address_current: randomHelpers.randomAddress(),
       address_perm: randomHelpers.randomAddress(),
       father_info: {
-        name: `${randomHelpers.randomFromArray(randomHelpers.thaiFirstNames)} ${randomHelpers.randomFromArray(randomHelpers.thaiLastNames)}`,
-        citizen_id: Array(13).fill(0).map(() => randomHelpers.randomNumber(0, 9)).join(""),
+        name: `${randomHelpers.randomFromArray(
+          randomHelpers.thaiFirstNames
+        )} ${randomHelpers.randomFromArray(randomHelpers.thaiLastNames)}`,
+        citizen_id: Array(13)
+          .fill(0)
+          .map(() => randomHelpers.randomNumber(0, 9))
+          .join(""),
         phone_number: randomHelpers.randomPhoneNumber(),
-        education_level: randomHelpers.randomFromArray(["ปริญญาตรี", "ปริญญาโท", "มัธยมศึกษา", "ประถมศึกษา"]),
+        education_level: randomHelpers.randomFromArray([
+          "ปริญญาตรี",
+          "ปริญญาโท",
+          "มัธยมศึกษา",
+          "ประถมศึกษา",
+        ]),
         email: `father${randomHelpers.randomNumber(1000, 9999)}@email.com`,
-        address_current: randomHelpers.randomAddress()
+        address_current: randomHelpers.randomAddress(),
       },
       mother_info: {
-        name: `${randomHelpers.randomFromArray(randomHelpers.thaiFirstNames)} ${randomHelpers.randomFromArray(randomHelpers.thaiLastNames)}`,
-        citizen_id: Array(13).fill(0).map(() => randomHelpers.randomNumber(0, 9)).join(""),
+        name: `${randomHelpers.randomFromArray(
+          randomHelpers.thaiFirstNames
+        )} ${randomHelpers.randomFromArray(randomHelpers.thaiLastNames)}`,
+        citizen_id: Array(13)
+          .fill(0)
+          .map(() => randomHelpers.randomNumber(0, 9))
+          .join(""),
         phone_number: randomHelpers.randomPhoneNumber(),
-        education_level: randomHelpers.randomFromArray(["ปริญญาตรี", "ปริญญาโท", "มัธยมศึกษา", "ประถมศึกษา"]),
+        education_level: randomHelpers.randomFromArray([
+          "ปริญญาตรี",
+          "ปริญญาโท",
+          "มัธยมศึกษา",
+          "ประถมศึกษา",
+        ]),
         email: `mother${randomHelpers.randomNumber(1000, 9999)}@email.com`,
-        address_current: randomHelpers.randomAddress()
+        address_current: randomHelpers.randomAddress(),
       },
       guardian_info: {
-        name: `${randomHelpers.randomFromArray(randomHelpers.thaiFirstNames)} ${randomHelpers.randomFromArray(randomHelpers.thaiLastNames)}`,
-        citizen_id: Array(13).fill(0).map(() => randomHelpers.randomNumber(0, 9)).join(""),
+        name: `${randomHelpers.randomFromArray(
+          randomHelpers.thaiFirstNames
+        )} ${randomHelpers.randomFromArray(randomHelpers.thaiLastNames)}`,
+        citizen_id: Array(13)
+          .fill(0)
+          .map(() => randomHelpers.randomNumber(0, 9))
+          .join(""),
         phone_number: randomHelpers.randomPhoneNumber(),
-        education_level: randomHelpers.randomFromArray(["ปริญญาตรี", "ปริญญาโท", "มัธยมศึกษา", "ประถมศึกษา"]),
+        education_level: randomHelpers.randomFromArray([
+          "ปริญญาตรี",
+          "ปริญญาโท",
+          "มัธยมศึกษา",
+          "ประถมศึกษา",
+        ]),
         email: `guardian${randomHelpers.randomNumber(1000, 9999)}@email.com`,
-        address_current: randomHelpers.randomAddress()
+        address_current: randomHelpers.randomAddress(),
       },
       survey: {
         familyStatus: null,
@@ -633,8 +642,8 @@ export default function StudentInfo() {
         legalStatus: null,
         livingWith: null,
         parentLegalStatus: null,
-        timestamp: new Date()
-      }
+        timestamp: new Date(),
+      },
     });
   };
 
