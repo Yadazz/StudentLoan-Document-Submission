@@ -10,11 +10,13 @@ import {
   ActivityIndicator,
   StyleSheet,
   Dimensions,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import {
   PanGestureHandler,
   PinchGestureHandler,
   State,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+} from "react-native-gesture-handler";
 import Animated, {
   useAnimatedGestureHandler,
   useSharedValue,
