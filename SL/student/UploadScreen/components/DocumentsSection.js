@@ -1,4 +1,4 @@
-// components/DocumentsSection.js - Updated with bottom action buttons
+// components/DocumentsSection.js - Updated with multiple files support
 import React from "react";
 import {
   View,
@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -21,6 +22,8 @@ const DocumentsSection = ({
   ocrBackendAvailable = false,
 }) => {
   const renderDocumentActions = (doc) => {
+    const docFiles = uploads[doc.id] || [];
+
     // Show validation spinner for OCR checking
     if (isValidatingOCR[doc.id]) {
       return (
@@ -33,22 +36,22 @@ const DocumentsSection = ({
       );
     }
 
-    if (uploads[doc.id]) {
+    if (docFiles.length > 0) {
       return (
         <View style={styles.actionButtons}>
           <TouchableOpacity
-            style={styles.viewButton}
-            onPress={() => onShowFileModal(doc.id, doc.title)}
+            style={styles.addMoreButton}
+            onPress={() => onFileUpload(doc.id, true)}
           >
-            <Ionicons name="eye-outline" size={16} color="#2563eb" />
-            <Text style={styles.buttonText}>ดูไฟล์</Text>
+            <Ionicons name="add-circle-outline" size={16} color="#2563eb" />
+            <Text style={styles.buttonText}>เพิ่มไฟล์</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.removeButton}
+            style={styles.removeAllButton}
             onPress={() => onRemoveFile(doc.id)}
           >
             <Ionicons name="trash-outline" size={16} color="#ef4444" />
-            <Text style={styles.buttonText}>ลบไฟล์</Text>
+            <Text style={styles.buttonText}>ลบทั้งหมด</Text>
           </TouchableOpacity>
         </View>
       );
@@ -57,7 +60,7 @@ const DocumentsSection = ({
         <View style={styles.actionButtons}>
           <TouchableOpacity
             style={styles.uploadButton}
-            onPress={() => onFileUpload(doc.id)}
+            onPress={() => onFileUpload(doc.id, true)}
           >
             <Ionicons name="cloud-upload-outline" size={16} color="#2563eb" />
             <Text style={styles.uploadButtonText}>อัปโหลด</Text>
@@ -88,38 +91,86 @@ const DocumentsSection = ({
     }
   };
 
+  const renderFilesList = (doc) => {
+    const docFiles = uploads[doc.id] || [];
+    
+    if (docFiles.length === 0) return null;
+
+    return (
+      <View style={styles.filesContainer}>
+        <Text style={styles.filesHeader}>
+          ไฟล์ที่อัปโหลด ({docFiles.length} ไฟล์)
+        </Text>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={styles.filesScrollView}
+        >
+          {docFiles.map((file, index) => (
+            <View key={`${doc.id}_${index}`} style={styles.fileCard}>
+              <TouchableOpacity
+                style={styles.filePreview}
+                onPress={() => onShowFileModal(doc.id, doc.title, index)}
+              >
+                <View style={styles.fileIconContainer}>
+                  <Ionicons
+                    name={getFileIcon(file.mimeType, file.filename)}
+                    size={24}
+                    color="#2563eb"
+                  />
+                </View>
+                <Text style={styles.fileIndex}>#{index + 1}</Text>
+              </TouchableOpacity>
+              
+              <View style={styles.fileDetails}>
+                <Text style={styles.fileName} numberOfLines={1}>
+                  {file.filename}
+                </Text>
+                <Text style={styles.fileSize}>
+                  {formatFileSize(file.size)}
+                </Text>
+                
+                {/* OCR validation badge for Form 101 files */}
+                {doc.id === "form_101" && file.ocrValidated && (
+                  <View style={styles.ocrValidatedBadge}>
+                    <Ionicons name="shield-checkmark" size={10} color="#10b981" />
+                    <Text style={styles.ocrValidatedText}>ตรวจสอบแล้ว</Text>
+                  </View>
+                )}
+              </View>
+              
+              <TouchableOpacity
+                style={styles.removeFileButton}
+                onPress={() => onRemoveFile(doc.id, index)}
+              >
+                <Ionicons name="close-circle" size={20} color="#ef4444" />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </ScrollView>
+      </View>
+    );
+  };
+
   const renderDocumentStatusBadge = (doc) => {
-    const upload = uploads[doc.id];
+    const docFiles = uploads[doc.id] || [];
 
-    if (!upload) return null;
+    if (docFiles.length === 0) return null;
 
-    // OCR validation badge for Form 101
-    if (doc.id === "form_101" && upload.ocrValidated) {
-      return (
-        <View style={styles.ocrValidatedBadge}>
-          <Ionicons name="shield-checkmark" size={12} color="#10b981" />
-          <Text style={styles.ocrValidatedText}>ตรวจสอบแล้ว</Text>
-        </View>
-      );
-    }
-
-    // OCR backend unavailable warning
-    if (doc.id === "form_101" && !ocrBackendAvailable) {
-      return (
-        <View style={styles.ocrUnavailableBadge}>
-          <Ionicons name="warning-outline" size={12} color="#f59e0b" />
-          <Text style={styles.ocrUnavailableText}>ไม่ได้ตรวจสอบ OCR</Text>
-        </View>
-      );
-    }
-
-    return null;
+    // Show total files count
+    return (
+      <View style={styles.filesCountBadge}>
+        <Ionicons name="documents" size={12} color="#2563eb" />
+        <Text style={styles.filesCountText}>{docFiles.length} ไฟล์</Text>
+      </View>
+    );
   };
 
   const getDocumentCardStyle = (doc) => {
     const baseStyle = [styles.documentCard];
+    const docFiles = uploads[doc.id] || [];
 
-    if (uploads[doc.id]) {
+    if (docFiles.length > 0) {
       baseStyle.push({ borderLeftColor: "#10b981" }); // Green for uploaded
     } else if (doc.required) {
       baseStyle.push({ borderLeftColor: "#ef4444" }); // Red for required
@@ -128,6 +179,25 @@ const DocumentsSection = ({
     }
 
     return baseStyle;
+  };
+
+  const getFileIcon = (mimeType, filename) => {
+    const type = mimeType?.toLowerCase() || "";
+    const name = filename?.toLowerCase() || "";
+
+    if (type.startsWith("image/") || name.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/)) {
+      return "image";
+    } else if (type.includes("pdf") || name.endsWith(".pdf")) {
+      return "document-text";
+    } else if (type.includes("word") || name.match(/\.(doc|docx)$/)) {
+      return "document";
+    } else if (type.includes("excel") || name.match(/\.(xls|xlsx)$/)) {
+      return "grid";
+    } else if (type.includes("text") || name.match(/\.(txt|json)$/)) {
+      return "document-text-outline";
+    } else {
+      return "document-outline";
+    }
   };
 
   return (
@@ -151,7 +221,7 @@ const DocumentsSection = ({
               <View style={styles.documentIcon}>
                 <Ionicons
                   name={
-                    uploads[doc.id]
+                    uploads[doc.id]?.length > 0
                       ? "checkmark-circle"
                       : doc.required
                       ? "document-text-outline"
@@ -159,7 +229,7 @@ const DocumentsSection = ({
                   }
                   size={24}
                   color={
-                    uploads[doc.id]
+                    uploads[doc.id]?.length > 0
                       ? "#10b981"
                       : doc.required
                       ? "#2563eb"
@@ -191,22 +261,21 @@ const DocumentsSection = ({
 
                 {renderDocumentStatusBadge(doc)}
 
-                {uploads[doc.id] && (
-                  <View style={styles.fileInfo}>
-                    <Text style={styles.fileName}>
-                      {uploads[doc.id].filename}
-                    </Text>
-                    <Text style={styles.fileSize}>
-                      {formatFileSize(uploads[doc.id].size)} •{" "}
-                      {uploads[doc.id].uploadDate}
-                    </Text>
+                {/* OCR backend unavailable warning for Form 101 */}
+                {doc.id === "form_101" && !ocrBackendAvailable && uploads[doc.id]?.length > 0 && (
+                  <View style={styles.ocrUnavailableBadge}>
+                    <Ionicons name="warning-outline" size={12} color="#f59e0b" />
+                    <Text style={styles.ocrUnavailableText}>ไม่ได้ตรวจสอบ OCR</Text>
                   </View>
                 )}
               </View>
             </View>
           </View>
 
-          {/* Action buttons moved to bottom */}
+          {/* Files list */}
+          {renderFilesList(doc)}
+
+          {/* Action buttons */}
           <View style={styles.documentActions}>
             {renderDocumentActions(doc)}
           </View>
@@ -260,7 +329,7 @@ const styles = StyleSheet.create({
     borderLeftColor: "#e2e8f0",
   },
   documentContent: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   documentInfo: {
     flexDirection: "row",
@@ -311,19 +380,19 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 8,
   },
-  ocrValidatedBadge: {
+  filesCountBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#d1fae5",
+    backgroundColor: "#eff6ff",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     marginBottom: 8,
     alignSelf: "flex-start",
   },
-  ocrValidatedText: {
+  filesCountText: {
     fontSize: 11,
-    color: "#065f46",
+    color: "#2563eb",
     fontWeight: "600",
     marginLeft: 4,
   },
@@ -343,21 +412,83 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 4,
   },
-  fileInfo: {
-    marginTop: 8,
-    paddingTop: 8,
+  filesContainer: {
+    marginBottom: 12,
+    paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: "#e2e8f0",
   },
-  fileName: {
+  filesHeader: {
     fontSize: 14,
     fontWeight: "500",
     color: "#374151",
+    marginBottom: 8,
+  },
+  filesScrollView: {
+    maxHeight: 120,
+  },
+  fileCard: {
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    marginRight: 12,
+    padding: 8,
+    minWidth: 100,
+    maxWidth: 120,
+    position: "relative",
+  },
+  filePreview: {
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  fileIconContainer: {
+    backgroundColor: "#eff6ff",
+    padding: 8,
+    borderRadius: 6,
+    marginBottom: 4,
+  },
+  fileIndex: {
+    fontSize: 10,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  fileDetails: {
+    alignItems: "center",
+  },
+  fileName: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#374151",
     marginBottom: 2,
+    textAlign: "center",
   },
   fileSize: {
-    fontSize: 12,
+    fontSize: 10,
     color: "#9ca3af",
+    textAlign: "center",
+  },
+  ocrValidatedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#d1fae5",
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  ocrValidatedText: {
+    fontSize: 9,
+    color: "#065f46",
+    fontWeight: "600",
+    marginLeft: 2,
+  },
+  removeFileButton: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    backgroundColor: "#fff",
+    borderRadius: 10,
   },
   documentActions: {
     borderTopWidth: 1,
@@ -388,6 +519,18 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 4,
   },
+  addMoreButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f0f9ff",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#0ea5e9",
+    minWidth: 100,
+    justifyContent: "center",
+  },
   validatingButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -406,19 +549,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 4,
   },
-  viewButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#eff6ff",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#2563eb",
-    minWidth: 90,
-    justifyContent: "center",
-  },
-  removeButton: {
+  removeAllButton: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fef2f2",
@@ -427,7 +558,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#ef4444",
-    minWidth: 90,
+    minWidth: 110,
     justifyContent: "center",
   },
   downloadButton: {
