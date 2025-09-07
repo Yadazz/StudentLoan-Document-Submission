@@ -1,4 +1,4 @@
-// UploadScreen.js (Updated with Term-based Storage Structure)
+// UploadScreen.js (Complete with redesigned UI matching DocumentStatusScreen)
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Platform, Dimensions, Image, ActivityIndicator } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
@@ -9,6 +9,7 @@ import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, deleteDoc }
 // เพิ่ม import สำหรับ Firebase Storage
 import { storage } from '../database/firebase';
 import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
+import { Ionicons } from "@expo/vector-icons";
 
 // Import refactored components
 import NoSurveyCard from './components/NoSurveyCard';
@@ -142,87 +143,87 @@ const UploadScreen = ({ navigation, route }) => {
     }
   };
 
- // ฟังก์ชันใหม่สำหรับอัปโหลดไฟล์ไปยัง Firebase Storage (โครงสร้างใหม่: student_name/academic_year/term/)
-const uploadFileToStorage = async (file, docId, userId, studentName, config) => {
-  try {
-    console.log("Starting upload for:", file.filename);
-    
-    // สร้าง path ใหม่ที่เริ่มต้นด้วยชื่อนักเรียนก่อน
-    const sanitizedStudentName = studentName.replace(/[.#$[\]/\\]/g, '_').replace(/\s+/g, '_');
-    const timestamp = new Date().getTime();
-    const fileExtension = file.filename.split('.').pop();
-    
-    // โครงสร้างใหม่: student_name/academic_year/term/document_id_timestamp.extension
-    const academicYear = config?.academicYear || "2568";
-    const term = config?.term || "1";
-    const storagePath = `student_documents/${sanitizedStudentName}/${academicYear}/term_${term}/${docId}_${timestamp}.${fileExtension}`;
-    
-    console.log("New storage path (student-first):", storagePath);
-    
-    // อ่านไฟล์เป็น blob
-    const response = await fetch(file.uri);
-    const blob = await response.blob();
-    
-    console.log("File converted to blob, size:", blob.size);
-    
-    // สร้าง reference ใน Storage
-    const storageRef = ref(storage, storagePath);
-    
-    // อัปโหลดพร้อมติดตาม progress
-    const uploadTask = uploadBytesResumable(storageRef, blob);
-    
-    return new Promise((resolve, reject) => {
-      uploadTask.on('state_changed',
-        (snapshot) => {
-          // คำนวณ progress
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          console.log(`Upload ${docId}: ${progress}% completed`);
-          
-          // อัปเดท progress state
-          setStorageUploadProgress(prev => ({
-            ...prev,
-            [docId]: Math.round(progress)
-          }));
-        },
-        (error) => {
-          console.error("Upload error:", error);
-          reject(error);
-        },
-        async () => {
-          try {
-            // อัปโหลดเสร็จแล้ว ดึง download URL
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            console.log("Upload completed, URL:", downloadURL);
+  // ฟังก์ชันใหม่สำหรับอัปโหลดไฟล์ไปยัง Firebase Storage (โครงสร้างใหม่: student_name/academic_year/term/)
+  const uploadFileToStorage = async (file, docId, userId, studentName, config) => {
+    try {
+      console.log("Starting upload for:", file.filename);
+      
+      // สร้าง path ใหม่ที่เริ่มต้นด้วยชื่อนักเรียนก่อน
+      const sanitizedStudentName = studentName.replace(/[.#$[\]/\\]/g, '_').replace(/\s+/g, '_');
+      const timestamp = new Date().getTime();
+      const fileExtension = file.filename.split('.').pop();
+      
+      // โครงสร้างใหม่: student_name/academic_year/term/document_id_timestamp.extension
+      const academicYear = config?.academicYear || "2568";
+      const term = config?.term || "1";
+      const storagePath = `student_documents/${sanitizedStudentName}/${academicYear}/term_${term}/${docId}_${timestamp}.${fileExtension}`;
+      
+      console.log("New storage path (student-first):", storagePath);
+      
+      // อ่านไฟล์เป็น blob
+      const response = await fetch(file.uri);
+      const blob = await response.blob();
+      
+      console.log("File converted to blob, size:", blob.size);
+      
+      // สร้าง reference ใน Storage
+      const storageRef = ref(storage, storagePath);
+      
+      // อัปโหลดพร้อมติดตาม progress
+      const uploadTask = uploadBytesResumable(storageRef, blob);
+      
+      return new Promise((resolve, reject) => {
+        uploadTask.on('state_changed',
+          (snapshot) => {
+            // คำนวณ progress
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            console.log(`Upload ${docId}: ${progress}% completed`);
             
-            // ลบ progress state
-            setStorageUploadProgress(prev => {
-              const newState = { ...prev };
-              delete newState[docId];
-              return newState;
-            });
-            
-            resolve({
-              downloadURL,
-              storagePath,
-              uploadedAt: new Date().toISOString(),
-              originalFileName: file.filename,
-              fileSize: file.size,
-              mimeType: file.mimeType,
-              academicYear: academicYear,
-              term: term,
-              studentFolder: sanitizedStudentName // เพิ่มข้อมูลโฟลเดอร์นักเรียน
-            });
-          } catch (error) {
+            // อัปเดท progress state
+            setStorageUploadProgress(prev => ({
+              ...prev,
+              [docId]: Math.round(progress)
+            }));
+          },
+          (error) => {
+            console.error("Upload error:", error);
             reject(error);
+          },
+          async () => {
+            try {
+              // อัปโหลดเสร็จแล้ว ดึง download URL
+              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+              console.log("Upload completed, URL:", downloadURL);
+              
+              // ลบ progress state
+              setStorageUploadProgress(prev => {
+                const newState = { ...prev };
+                delete newState[docId];
+                return newState;
+              });
+              
+              resolve({
+                downloadURL,
+                storagePath,
+                uploadedAt: new Date().toISOString(),
+                originalFileName: file.filename,
+                fileSize: file.size,
+                mimeType: file.mimeType,
+                academicYear: academicYear,
+                term: term,
+                studentFolder: sanitizedStudentName // เพิ่มข้อมูลโฟลเดอร์นักเรียน
+              });
+            } catch (error) {
+              reject(error);
+            }
           }
-        }
-      );
-    });
-  } catch (error) {
-    console.error("Error in uploadFileToStorage:", error);
-    throw error;
-  }
-};
+        );
+      });
+    } catch (error) {
+      console.error("Error in uploadFileToStorage:", error);
+      throw error;
+    }
+  };
 
   const deleteSurveyData = async () => {
     const currentUser = auth.currentUser;
@@ -662,9 +663,12 @@ const uploadFileToStorage = async (file, docId, userId, studentName, config) => 
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={styles.loadingContainer}>
+        <View style={styles.headerIcon}>
+          <Ionicons name="cloud-upload" size={32} color="#2563eb" />
+        </View>
         <ActivityIndicator size="large" color="#2563eb" />
-        <Text style={{ marginTop: 20, fontSize: 16, color: '#475569' }}>กำลังโหลดข้อมูล...</Text>
+        <Text style={styles.loadingText}>กำลังโหลดข้อมูล...</Text>
       </View>
     );
   }
@@ -672,7 +676,17 @@ const uploadFileToStorage = async (file, docId, userId, studentName, config) => 
   if (!surveyData) {
     return (
       <ScrollView contentContainerStyle={styles.container}>
-        <NoSurveyCard onStartSurvey={handleStartSurvey} />
+        <View style={styles.emptyState}>
+          <View style={styles.headerIcon}>
+            <Ionicons name="document-outline" size={48} color="#9ca3af" />
+          </View>
+          <Text style={styles.emptyStateTitle}>ยังไม่มีข้อมูลแบบสอบถาม</Text>
+          <Text style={styles.emptyStateText}>กรุณาทำแบบสอบถามก่อนอัปโหลดเอกสาร</Text>
+          <TouchableOpacity style={styles.startSurveyButton} onPress={handleStartSurvey}>
+            <Ionicons name="play-outline" size={20} color="#ffffff" />
+            <Text style={styles.startSurveyButtonText}>เริ่มทำแบบสอบถาม</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     );
   }
@@ -682,24 +696,74 @@ const uploadFileToStorage = async (file, docId, userId, studentName, config) => 
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <UploadHeader surveyData={surveyData} onRetakeSurvey={handleRetakeSurvey} />
+      {/* Header Section */}
+      <View style={styles.header}>
+        <View style={styles.headerIcon}>
+          <Ionicons name="cloud-upload" size={32} color="#2563eb" />
+        </View>
+        <Text style={styles.title}>อัปโหลดเอกสาร</Text>
+        <Text style={styles.subtitle}>
+          {surveyData && `ข้อมูลจากแบบสอบถาม: ${surveyData.name || 'ไม่ระบุชื่อ'}`}
+        </Text>
+        <TouchableOpacity style={styles.retakeButton} onPress={handleRetakeSurvey}>
+          <Ionicons name="refresh-outline" size={16} color="#6b7280" />
+          <Text style={styles.retakeButtonText}>ทำแบบสอบถามใหม่</Text>
+        </TouchableOpacity>
+      </View>
       
-      {/* แสดงข้อมูล Academic Year และ Term */}
+      {/* Term Information Card */}
       {appConfig && (
         <View style={styles.termInfoCard}>
-          <Text style={styles.termInfoTitle}>ข้อมูลการส่งเอกสาร</Text>
+          <View style={styles.termInfoHeader}>
+            <Ionicons name="calendar-outline" size={20} color="#2563eb" />
+            <Text style={styles.termInfoTitle}>ข้อมูลการส่งเอกสาร</Text>
+          </View>
           <Text style={styles.termInfoText}>
-            ปีการศึกษา: {appConfig.academicYear} • เทอม: {appConfig.term}
+            ปีการศึกษา {appConfig.academicYear} • เทอม {appConfig.term}
           </Text>
         </View>
       )}
       
-      <UploadProgress stats={stats} />
+      {/* Upload Progress Card */}
+      <View style={styles.progressCard}>
+        <Text style={styles.progressTitle}>สถานะการอัปโหลด</Text>
+        <View style={styles.statusGrid}>
+          <View style={styles.statusItem}>
+            <Text style={[styles.statusNumber, { color: "#10b981" }]}>{stats.uploadedRequired}</Text>
+            <Text style={styles.statusLabel}>อัปโหลดแล้ว</Text>
+          </View>
+          <View style={styles.statusItem}>
+            <Text style={[styles.statusNumber, { color: "#f59e0b" }]}>{stats.required - stats.uploadedRequired}</Text>
+            <Text style={styles.statusLabel}>คงเหลือ</Text>
+          </View>
+          <View style={styles.statusItem}>
+            <Text style={[styles.statusNumber, { color: "#2563eb" }]}>{stats.required}</Text>
+            <Text style={styles.statusLabel}>จำเป็นทั้งหมด</Text>
+          </View>
+        </View>
+        
+        <View style={styles.progressBarContainer}>
+          <View style={styles.progressBar}>
+            <View 
+              style={[
+                styles.progressFill, 
+                { width: `${(stats.uploadedRequired / stats.required) * 100}%` }
+              ]} 
+            />
+          </View>
+          <Text style={styles.progressText}>
+            {Math.round((stats.uploadedRequired / stats.required) * 100)}% เสร็จสิ้น
+          </Text>
+        </View>
+      </View>
       
-      {/* แสดง Storage Upload Progress ถ้ามี */}
+      {/* Storage Upload Progress */}
       {Object.keys(storageUploadProgress).length > 0 && (
         <View style={styles.storageProgressCard}>
-          <Text style={styles.storageProgressTitle}>กำลังอัปโหลดไฟล์...</Text>
+          <View style={styles.cardHeader}>
+            <Ionicons name="cloud-upload-outline" size={20} color="#8b5cf6" />
+            <Text style={styles.cardTitle}>กำลังอัปโหลดไฟล์...</Text>
+          </View>
           {Object.entries(storageUploadProgress).map(([docId, progress]) => (
             <View key={docId} style={styles.storageProgressItem}>
               <Text style={styles.storageProgressLabel}>{uploads[docId]?.filename || docId}</Text>
@@ -717,40 +781,116 @@ const uploadFileToStorage = async (file, docId, userId, studentName, config) => 
         </View>
       )}
 
-      <DocumentList
-        documents={documents}
-        uploads={uploads}
-        uploadProgress={uploadProgress}
-        handleFileUpload={handleFileUpload}
-        handleRemoveFile={handleRemoveFile}
-        handleShowFileModal={handleShowFileModal}
-        handleDownloadDocument={handleDownloadDocument} 
-      />
-      
-      <TouchableOpacity
-        style={[
-          styles.submitButton, 
-          (stats.uploadedRequired < stats.required || isSubmitting) && styles.submitButtonDisabled
-        ]}
-        onPress={handleSubmitDocuments}
-        disabled={stats.uploadedRequired < stats.required || isSubmitting}
-      >
-        {isSubmitting ? (
-          <View style={styles.submitButtonLoading}>
-            <ActivityIndicator size="small" color="#ffffff" />
-            <Text style={[styles.submitButtonText, { marginLeft: 8 }]}>
-              {Object.keys(storageUploadProgress).length > 0 
-                ? `กำลังอัปโหลด... (${Object.keys(storageUploadProgress).length} ไฟล์)`
-                : 'กำลังส่งเอกสาร...'
-              }
-            </Text>
+      {/* Documents List */}
+      <View style={styles.documentsSection}>
+        <Text style={styles.sectionTitle}>รายการเอกสาร</Text>
+        {documents.map((doc, index) => (
+          <View key={doc.id} style={styles.documentCard}>
+            <View style={styles.documentHeader}>
+              <View style={styles.documentInfo}>
+                <View style={styles.documentIcon}>
+                  <Ionicons 
+                    name={uploads[doc.id] ? "checkmark-circle" : (doc.required ? "document-text-outline" : "document-outline")} 
+                    size={24} 
+                    color={uploads[doc.id] ? "#10b981" : (doc.required ? "#2563eb" : "#9ca3af")} 
+                  />
+                </View>
+                <View style={styles.documentDetails}>
+                  <Text style={styles.documentTitle} numberOfLines={2}>
+                    {doc.title}
+                    {doc.required && <Text style={styles.requiredMark}> *</Text>}
+                  </Text>
+                  {doc.description && (
+                    <Text style={styles.documentDescription} numberOfLines={2}>
+                      {doc.description}
+                    </Text>
+                  )}
+                  {uploads[doc.id] && (
+                    <View style={styles.fileInfo}>
+                      <Text style={styles.fileName}>{uploads[doc.id].filename}</Text>
+                      <Text style={styles.fileSize}>
+                        {formatFileSize(uploads[doc.id].size)} • {uploads[doc.id].uploadDate}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+              
+              <View style={styles.documentActions}>
+                {uploads[doc.id] ? (
+                  <View style={styles.actionButtons}>
+                    <TouchableOpacity
+                      style={styles.viewButton}
+                      onPress={() => handleShowFileModal(doc.id, doc.title)}
+                    >
+                      <Ionicons name="eye-outline" size={16} color="#2563eb" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => handleRemoveFile(doc.id)}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.actionButtons}>
+                    <TouchableOpacity
+                      style={styles.uploadButton}
+                      onPress={() => handleFileUpload(doc.id)}
+                    >
+                      <Ionicons name="cloud-upload-outline" size={16} color="#2563eb" />
+                      <Text style={styles.uploadButtonText}>อัปโหลด</Text>
+                    </TouchableOpacity>
+                    {/* Download button for generated forms */}
+                    {['form_101', 'consent_student_form', 'consent_father_form', 'consent_mother_form', 'guardian_income_cert', 'father_income_cert', 'mother_income_cert', 'single_parent_income_cert', 'famo_income_cert', 'family_status_cert'].includes(doc.id) && (
+                      <TouchableOpacity
+                        style={styles.downloadButton}
+                        onPress={() => handleDownloadDocument(doc.id)}
+                      >
+                        <Ionicons name="download-outline" size={16} color="#10b981" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+              </View>
+            </View>
           </View>
-        ) : (
-          <Text style={styles.submitButtonText}>
-            {stats.uploadedRequired >= stats.required ? 'ส่งเอกสาร' : `ส่งเอกสาร (${stats.uploadedRequired}/${stats.required})`}
-          </Text>
-        )}
-      </TouchableOpacity>
+        ))}
+      </View>
+      
+      {/* Submit Button */}
+      <View style={styles.submitSection}>
+        <TouchableOpacity
+          style={[
+            styles.submitButton, 
+            (stats.uploadedRequired < stats.required || isSubmitting) && styles.submitButtonDisabled
+          ]}
+          onPress={handleSubmitDocuments}
+          disabled={stats.uploadedRequired < stats.required || isSubmitting}
+        >
+          {isSubmitting ? (
+            <View style={styles.submitButtonLoading}>
+              <ActivityIndicator size="small" color="#ffffff" />
+              <Text style={[styles.submitButtonText, { marginLeft: 8 }]}>
+                {Object.keys(storageUploadProgress).length > 0 
+                  ? `กำลังอัปโหลด... (${Object.keys(storageUploadProgress).length} ไฟล์)`
+                  : 'กำลังส่งเอกสาร...'
+                }
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.submitButtonContent}>
+              <Ionicons name="send-outline" size={20} color="#ffffff" />
+              <Text style={styles.submitButtonText}>
+                {stats.uploadedRequired >= stats.required 
+                  ? 'ส่งเอกสาร' 
+                  : `ส่งเอกสาร (${stats.uploadedRequired}/${stats.required})`
+                }
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
       
       <FileDetailModal
         visible={showFileModal}
@@ -775,76 +915,199 @@ const uploadFileToStorage = async (file, docId, userId, studentName, config) => 
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: '#eef2ff',
+    backgroundColor: "#f8fafc",
     padding: 16,
-    paddingBottom: 40,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: "#f8fafc",
+    padding: 32,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#64748b',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#1e293b",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: "#64748b",
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  startSurveyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: "#2563eb",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    shadowColor: "#2563eb",
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  startSurveyButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 8,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingVertical: 20,
+  },
+  headerIcon: {
+    backgroundColor: "#eff6ff",
+    padding: 16,
+    borderRadius: 50,
+    marginBottom: 12,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#1e293b",
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "#64748b",
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  retakeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#f1f5f9",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  retakeButtonText: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginLeft: 4,
   },
   termInfoCard: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     padding: 16,
     borderRadius: 16,
     marginBottom: 16,
     borderLeftWidth: 4,
-    borderLeftColor: '#3b82f6',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
+    borderLeftColor: "#2563eb",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 3,
+  },
+  termInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   termInfoTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1e293b',
-    marginBottom: 4,
+    marginLeft: 8,
   },
   termInfoText: {
     fontSize: 14,
     color: '#64748b',
   },
-  submitButton: {
-    backgroundColor: '#10b981',
-    paddingVertical: 16,
+  progressCard: {
+    backgroundColor: "#fff",
+    padding: 20,
     borderRadius: 16,
-    alignItems: 'center',
-    marginTop: 12,
-    marginBottom: 30,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#a7f3d0',
-  },
-  submitButtonText: {
-    color: '#ffffff',
-    fontSize: 17,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  submitButtonLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Styles สำหรับ Storage Progress
-  storageProgressCard: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 3,
   },
-  storageProgressTitle: {
+  progressTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 16,
+    color: "#1e293b",
+    textAlign: 'center',
+  },
+  statusGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 20,
+  },
+  statusItem: {
+    alignItems: 'center',
+  },
+  statusNumber: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  statusLabel: {
+    fontSize: 12,
+    color: "#64748b",
+    textAlign: 'center',
+  },
+  progressBarContainer: {
+    alignItems: 'center',
+  },
+  progressBar: {
+    width: '100%',
+    height: 8,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#10b981',
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 14,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  storageProgressCard: {
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cardTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1e293b',
-    marginBottom: 12,
-    textAlign: 'center',
+    marginLeft: 8,
   },
   storageProgressItem: {
     marginBottom: 12,
@@ -863,14 +1126,166 @@ const styles = StyleSheet.create({
   },
   storageProgressFill: {
     height: '100%',
-    backgroundColor: '#10b981',
+    backgroundColor: '#8b5cf6',
     borderRadius: 3,
   },
   storageProgressText: {
     fontSize: 12,
-    color: '#10b981',
+    color: '#8b5cf6',
     textAlign: 'right',
     fontWeight: '600',
+  },
+  documentsSection: {
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 16,
+    color: "#1e293b",
+  },
+  documentCard: {
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: "#f8fafc",
+    borderLeftWidth: 4,
+    borderLeftColor: "#e2e8f0",
+  },
+  documentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  documentInfo: {
+    flexDirection: 'row',
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+  documentIcon: {
+    marginRight: 12,
+    paddingTop: 2,
+  },
+  documentDetails: {
+    flex: 1,
+  },
+  documentTitle: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#1e293b",
+    marginBottom: 4,
+  },
+  requiredMark: {
+    color: "#ef4444",
+    fontWeight: "bold",
+  },
+  documentDescription: {
+    fontSize: 13,
+    color: "#64748b",
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  fileInfo: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+  },
+  fileName: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#374151",
+    marginBottom: 2,
+  },
+  fileSize: {
+    fontSize: 12,
+    color: "#9ca3af",
+  },
+  documentActions: {
+    alignItems: 'flex-end',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  uploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: "#eff6ff",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#2563eb",
+  },
+  uploadButtonText: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: "600",
+    marginLeft: 4,
+  },
+  viewButton: {
+    backgroundColor: "#eff6ff",
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#2563eb",
+  },
+  removeButton: {
+    backgroundColor: "#fef2f2",
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#ef4444",
+  },
+  downloadButton: {
+    backgroundColor: "#f0fdf4",
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#10b981",
+  },
+  submitSection: {
+    marginBottom: 30,
+  },
+  submitButton: {
+    backgroundColor: "#10b981",
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: "#10b981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  submitButtonDisabled: {
+    backgroundColor: "#a7f3d0",
+    shadowOpacity: 0.1,
+  },
+  submitButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitButtonText: {
+    color: "#ffffff",
+    fontSize: 17,
+    fontWeight: "bold",
+    letterSpacing: 0.5,
+    marginLeft: 8,
+  },
+  submitButtonLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
