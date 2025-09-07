@@ -1,4 +1,4 @@
-// UploadScreen.js (Main component - refactored)
+// UploadScreen.js (Main component - refactored with OCR validation)
 import { useState, useEffect } from "react";
 import {
   View,
@@ -18,6 +18,13 @@ import {
 } from "firebase/firestore";
 import { storage } from "../../database/firebase";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+
+// Import OCR validation
+import {
+  validateForm101Document,
+  showValidationAlert,
+  checkOCRBackendStatus,
+} from "./documents_ocr/Form101Ocr";
 
 // Import refactored components
 import LoadingScreen from "./components/LoadingScreen";
@@ -50,6 +57,22 @@ const UploadScreen = ({ navigation, route }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [storageUploadProgress, setStorageUploadProgress] = useState({});
   const [appConfig, setAppConfig] = useState(null);
+
+  // OCR related states
+  const [isValidatingOCR, setIsValidatingOCR] = useState({});
+  const [ocrBackendAvailable, setOcrBackendAvailable] = useState(false);
+
+  // Check OCR backend status on component mount
+  useEffect(() => {
+    const checkOCRStatus = async () => {
+      const isAvailable = await checkOCRBackendStatus();
+      setOcrBackendAvailable(isAvailable);
+      if (!isAvailable) {
+        console.warn("OCR backend is not available");
+      }
+    };
+    checkOCRStatus();
+  }, []);
 
   // Fetch app configuration
   const fetchAppConfig = async () => {
@@ -141,6 +164,55 @@ const UploadScreen = ({ navigation, route }) => {
     }
   };
 
+  // OCR validation function
+  const performOCRValidation = async (file, docId) => {
+    if (!ocrBackendAvailable) {
+      Alert.alert(
+        "ระบบ OCR ไม่พร้อมใช้งาน",
+        "ไม่สามารถตรวจสอบเอกสารได้ในขณะนี้ คุณสามารถดำเนินการต่อได้",
+        [{ text: "ตกลง" }]
+      );
+      return true; // Allow to continue if OCR is not available
+    }
+
+    setIsValidatingOCR((prev) => ({ ...prev, [docId]: true }));
+
+    try {
+      const validationResult = await validateForm101Document(file.uri);
+
+      return new Promise((resolve) => {
+        showValidationAlert(
+          validationResult,
+          () => {
+            console.log("✓ OCR Validation passed for", file.filename);
+            resolve(true);
+          },
+          () => {
+            console.log("✗ OCR Validation failed for", file.filename);
+            resolve(false);
+          }
+        );
+      });
+    } catch (error) {
+      console.error("OCR validation error:", error);
+      Alert.alert(
+        "เกิดข้อผิดพลาดในการตรวจสอบ",
+        `ไม่สามารถตรวจสอบเอกสารได้: ${error.message}\nคุณต้องการดำเนินการต่อหรือไม่?`,
+        [
+          { text: "ลองใหม่", style: "cancel", onPress: () => resolve(false) },
+          { text: "ดำเนินการต่อ", onPress: () => resolve(true) },
+        ]
+      );
+      return false;
+    } finally {
+      setIsValidatingOCR((prev) => {
+        const newState = { ...prev };
+        delete newState[docId];
+        return newState;
+      });
+    }
+  };
+
   // Upload file to Firebase Storage
   const uploadFileToStorage = async (
     file,
@@ -219,7 +291,7 @@ const UploadScreen = ({ navigation, route }) => {
     if (!currentUser) return;
     try {
       const userSurveyRef = doc(db, "users", currentUser.uid);
-      await updateDoc(userSurveyRef, {
+      await updateDoc(userRef, {
         survey: deleteField(),
         uploads: deleteField(),
       });
@@ -233,7 +305,7 @@ const UploadScreen = ({ navigation, route }) => {
   const handleRetakeSurvey = () => {
     Alert.alert(
       "ทำแบบสอบถามใหม่",
-      "การทำแบบสอบถามใหม่จะลบข้อมูลและไฟล์ที่อัพโหลดทั้งหมด\nคุณแน่ใจหรือไม่?",
+      "การทำแบบสอบถามใหม่จะลบข้อมูลและไฟล์ที่อัปโหลดทั้งหมด\nคุณแน่ใจหรือไม่?",
       [
         { text: "ยกเลิก", style: "cancel" },
         {
@@ -260,7 +332,7 @@ const UploadScreen = ({ navigation, route }) => {
     });
   };
 
-  // Handle file upload
+  // Handle file upload with OCR validation
   const handleFileUpload = async (docId) => {
     try {
       const DocumentPicker = await import("expo-document-picker");
@@ -271,6 +343,14 @@ const UploadScreen = ({ navigation, route }) => {
       if (result.canceled) return;
       const file = result.assets[0];
 
+      // Check if this is a Form 101 document that needs OCR validation
+      if (docId === "form_101") {
+        const isValid = await performOCRValidation(file, docId);
+        if (!isValid) {
+          return; // Stop upload if validation fails
+        }
+      }
+
       const newUploads = {
         ...uploads,
         [docId]: {
@@ -280,6 +360,7 @@ const UploadScreen = ({ navigation, route }) => {
           size: file.size,
           uploadDate: new Date().toLocaleString("th-TH"),
           status: "pending",
+          ocrValidated: docId === "form_101", // Mark if OCR validated
         },
       };
 
@@ -318,7 +399,7 @@ const UploadScreen = ({ navigation, route }) => {
     if (uploadedRequiredDocs.length < requiredDocs.length) {
       Alert.alert(
         "เอกสารไม่ครบ",
-        `คุณยังอัพโหลดเอกสารไม่ครบ (${uploadedRequiredDocs.length}/${requiredDocs.length})`,
+        `คุณยังอัปโหลดเอกสารไม่ครบ (${uploadedRequiredDocs.length}/${requiredDocs.length})`,
         [{ text: "ตกลง" }]
       );
       return;
@@ -430,7 +511,7 @@ const UploadScreen = ({ navigation, route }) => {
         "ส่งเอกสารสำเร็จ",
         `เอกสารของคุณได้ถูกส่งและอัปโหลดเรียบร้อยแล้ว\nปีการศึกษา: ${
           appConfig?.academicYear || "2568"
-        } เทอม: ${appConfig?.term || "1"}\nคุณสามารถติดตามสถานะได้ในหน้าแสดงผล`,
+        } เทอม: ${appConfig?.term || "1"}\nคุณสามารถติดตามได้ในหน้าแสดงผล`,
         [
           {
             text: "ดูสถานะ",
@@ -611,6 +692,8 @@ const UploadScreen = ({ navigation, route }) => {
         onShowFileModal={handleShowFileModal}
         onDownloadDocument={handleDocumentDownload}
         formatFileSize={formatFileSize}
+        isValidatingOCR={isValidatingOCR}
+        ocrBackendAvailable={ocrBackendAvailable}
       />
 
       <SubmitSection
