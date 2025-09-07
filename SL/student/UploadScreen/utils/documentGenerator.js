@@ -21,7 +21,7 @@ export const generateDocumentsList = (data) => {
   documents.push(
     {
       id: "form_101",
-      title: "แบบฟอร์ม กศ. 101",
+      title: "แบบฟอร์ม กยศ.101",
       description: "กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร",
       required: true,
     },
@@ -83,7 +83,7 @@ export const generateDocumentsList = (data) => {
       documents.push(
         {
           id: "famo_income_cert",
-          title: "หนังสือรับรองรายได้ กศ. 102 ของบิดา มารดา",
+          title: "หนังสือรับรองรายได้ กยศ. 102 ของบิดา มารดา",
           description: "กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร",
           required: true,
         },
@@ -107,7 +107,7 @@ export const generateDocumentsList = (data) => {
         documents.push(
           {
             id: "father_income_cert",
-            title: "หนังสือรับรองรายได้ กศ. 102 ของบิดา",
+            title: "หนังสือรับรองรายได้ กยศ. 102 ของบิดา",
             description: "กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร",
             required: true,
           },
@@ -132,7 +132,7 @@ export const generateDocumentsList = (data) => {
         documents.push(
           {
             id: "mother_income_cert",
-            title: "หนังสือรับรองรายได้ กศ. 102 ของมารดา",
+            title: "หนังสือรับรองรายได้ กยศ. 102 ของมารดา",
             description: "กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร",
             required: true,
           },
@@ -209,7 +209,7 @@ export const generateDocumentsList = (data) => {
       documents.push(
         {
           id: "single_parent_income_cert",
-          title: `หนังสือรับรองรายได้ กศ. 102 ของ${parent}`,
+          title: `หนังสือรับรองรายได้ กยศ. 102 ของ${parent}`,
           required: true,
         },
         {
@@ -248,7 +248,7 @@ export const generateDocumentsList = (data) => {
       documents.push(
         {
           id: "guardian_income_cert",
-          title: "หนังสือรับรองรายได้ กศ. 102 ของผู้ปกครอง",
+          title: "หนังสือรับรองรายได้ กยศ. 102 ของผู้ปกครอง",
           description: "กรอกข้อมูลตามจริงให้ครบถ้วน ก่อนอัพโหลดเอกสาร",
           required: true,
         },
