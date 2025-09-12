@@ -1,4 +1,4 @@
-// UploadScreen.js (Main component - Updated with ConsentFormOcr support)
+// UploadScreen.js (Main component - Updated with PDF conversion for images)
 import { useState, useEffect } from "react";
 import {
   View,
@@ -18,6 +18,10 @@ import {
 } from "firebase/firestore";
 import { storage } from "../../database/firebase";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+// Import for PDF creation
+import * as Print from 'expo-print';
+import * as FileSystem from 'expo-file-system';
+import { mergeImagesToPdf } from './utils/pdfMerger';
 
 // Import OCR validation
 import {
@@ -25,14 +29,6 @@ import {
   showValidationAlert,
   checkOCRBackendStatus,
 } from "./documents_ocr/Form101Ocr";
-
-// Import ConsentForm OCR validation
-import {
-  validateConsentFormDocument,
-  validateConsentByType,
-  showConsentFormValidationAlert,
-  checkConsentFormOCRBackendStatus,
-} from "./documents_ocr/ConsentFormOcr";
 
 // Import refactored components
 import LoadingScreen from "./components/LoadingScreen";
@@ -71,24 +67,17 @@ const UploadScreen = ({ navigation, route }) => {
   // OCR related states
   const [isValidatingOCR, setIsValidatingOCR] = useState({});
   const [ocrBackendAvailable, setOcrBackendAvailable] = useState(false);
-  const [consentFormOcrBackendAvailable, setConsentFormOcrBackendAvailable] = useState(false);
+
+  // New state for PDF conversion
+  const [isConvertingToPDF, setIsConvertingToPDF] = useState({});
 
   // Check OCR backend status on component mount
   useEffect(() => {
     const checkOCRStatus = async () => {
-      // Check Form 101 OCR backend
-      const form101Available = await checkOCRBackendStatus();
-      setOcrBackendAvailable(form101Available);
-      
-      // Check Consent Form OCR backend
-      const consentFormAvailable = await checkConsentFormOCRBackendStatus();
-      setConsentFormOcrBackendAvailable(consentFormAvailable);
-      
-      if (!form101Available) {
-        console.warn("Form 101 OCR backend is not available");
-      }
-      if (!consentFormAvailable) {
-        console.warn("Consent Form OCR backend is not available");
+      const isAvailable = await checkOCRBackendStatus();
+      setOcrBackendAvailable(isAvailable);
+      if (!isAvailable) {
+        console.warn("OCR backend is not available");
       }
     };
     checkOCRStatus();
@@ -195,34 +184,110 @@ const UploadScreen = ({ navigation, route }) => {
     }
   };
 
-  // Helper function to determine consent type from document ID
-  const getConsentTypeFromDocId = (docId) => {
-    const typeMap = {
-      consent_student_form: "student",
-      consent_father_form: "father", 
-      consent_mother_form: "mother",
-    };
-    return typeMap[docId] || "general";
+  // Function to check if file is an image
+  const isImageFile = (mimeType, filename) => {
+    const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp', 'image/webp'];
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+    
+    if (mimeType && imageTypes.some(type => mimeType.toLowerCase().includes(type))) {
+      return true;
+    }
+    
+    if (filename && imageExtensions.some(ext => filename.toLowerCase().endsWith(ext))) {
+      return true;
+    }
+    
+    return false;
   };
 
-  // Updated OCR validation function with consent form support
-  const performOCRValidation = async (file, docId) => {
-    const isForm101 = docId === "form_101";
-    const isConsentForm = ["consent_student_form", "consent_father_form", "consent_mother_form"].includes(docId);
-    
-    // Check if this document requires OCR validation
-    if (!isForm101 && !isConsentForm) {
-      return true; // No validation needed for other document types
-    }
+  // Function to convert image to PDF
+  const convertImageToPDF = async (imageFile, docId, fileIndex) => {
+  try {
+    setIsConvertingToPDF(prev => ({
+      ...prev,
+      [`${docId}_${fileIndex}`]: true
+    }));
 
-    // Check backend availability
-    const backendAvailable = isForm101 ? ocrBackendAvailable : consentFormOcrBackendAvailable;
-    
-    if (!backendAvailable) {
-      const documentType = isForm101 ? "Form 101" : "หนังสือยินยอม";
+    // อ่านรูปภาพเป็น base64
+    const base64Image = await FileSystem.readAsStringAsync(imageFile.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    const mimeType = imageFile.mimeType || 'image/jpeg';
+    const base64DataUri = `data:${mimeType};base64,${base64Image}`;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+          <style>
+              /* กำหนดขนาดหน้ากระดาษและขอบให้ไม่มีเลย */
+              @page {
+                margin: 0;
+              }
+              body {
+                margin: 0;
+                padding: 0;
+              }
+              img {
+                width: 100vw;
+                height: 100vh;
+                object-fit: contain; /* ปรับขนาดรูปให้พอดีหน้ากระดาษ */
+                display: block;
+              }
+          </style>
+      </head>
+      <body>
+          <img src="${base64DataUri}" />
+      </body>
+      </html>
+    `;
+
+    // แปลง HTML เป็น PDF
+    const { uri: pdfUri } = await Print.printToFileAsync({
+      html: htmlContent,
+      base64: false,
+    });
+
+    const pdfInfo = await FileSystem.getInfoAsync(pdfUri);
+    const originalName = imageFile.filename || imageFile.name || 'image';
+    const nameWithoutExtension = originalName.replace(/\.[^/.]+$/, '');
+
+    // สร้างอ็อบเจกต์ไฟล์ PDF ใหม่ พร้อมคุณสมบัติที่จำเป็นทั้งหมด
+    const pdfFile = {
+      filename: `${nameWithoutExtension}_converted.pdf`,
+      uri: pdfUri,
+      mimeType: 'application/pdf',
+      size: pdfInfo.size,
+      uploadDate: new Date().toLocaleString("th-TH"),
+      status: "pending",
+      ocrValidated: docId === "form_101",
+      fileIndex: fileIndex,
+      convertedFromImage: true,
+      originalImageName: imageFile.filename ?? null,
+      originalImageType: imageFile.mimeType ?? null,
+    };
+
+    return pdfFile;
+
+  } catch (error) {
+    console.error('Error converting image to PDF:', error);
+    throw new Error(`ไม่สามารถแปลงรูปภาพเป็น PDF ได้: ${error.message}`);
+  } finally {
+    setIsConvertingToPDF(prev => {
+      const newState = { ...prev };
+      delete newState[`${docId}_${fileIndex}`];
+      return newState;
+    });
+  }
+};
+
+  // OCR validation function
+  const performOCRValidation = async (file, docId) => {
+    if (!ocrBackendAvailable) {
       Alert.alert(
         "ระบบ OCR ไม่พร้อมใช้งาน",
-        `ไม่สามารถตรวจสอบ${documentType}ได้ในขณะนี้ คุณสามารถดำเนินการต่อได้`,
+        "ไม่สามารถตรวจสอบเอกสารได้ในขณะนี้ คุณสามารถดำเนินการต่อได้",
         [{ text: "ตกลง" }]
       );
       return true; // Allow to continue if OCR is not available
@@ -231,50 +296,26 @@ const UploadScreen = ({ navigation, route }) => {
     setIsValidatingOCR((prev) => ({ ...prev, [docId]: true }));
 
     try {
-      let validationResult;
-      
-      if (isForm101) {
-        // Use Form 101 OCR validation
-        validationResult = await validateForm101Document(file.uri);
-        
-        return new Promise((resolve) => {
-          showValidationAlert(
-            validationResult,
-            () => {
-              console.log("✓ Form 101 OCR Validation passed for", file.name);
-              resolve(true);
-            },
-            () => {
-              console.log("✗ Form 101 OCR Validation failed for", file.name);
-              resolve(false);
-            }
-          );
-        });
-      } else if (isConsentForm) {
-        // Use Consent Form OCR validation
-        const consentType = getConsentTypeFromDocId(docId);
-        validationResult = await validateConsentByType(file.uri, consentType);
-        
-        return new Promise((resolve) => {
-          showConsentFormValidationAlert(
-            validationResult,
-            () => {
-              console.log("✓ Consent Form OCR Validation passed for", file.name, "type:", consentType);
-              resolve(true);
-            },
-            () => {
-              console.log("✗ Consent Form OCR Validation failed for", file.name, "type:", consentType);
-              resolve(false);
-            }
-          );
-        });
-      }
+      const validationResult = await validateForm101Document(file.uri);
+
+      return new Promise((resolve) => {
+        showValidationAlert(
+          validationResult,
+          () => {
+            console.log("✓ OCR Validation passed for", file.name);
+            resolve(true);
+          },
+          () => {
+            console.log("✗ OCR Validation failed for", file.name);
+            resolve(false);
+          }
+        );
+      });
     } catch (error) {
       console.error("OCR validation error:", error);
-      const documentType = isForm101 ? "Form 101" : "หนังสือยินยอม";
       Alert.alert(
         "เกิดข้อผิดพลาดในการตรวจสอบ",
-        `ไม่สามารถตรวจสอบ${documentType}ได้: ${error.message}\nคุณต้องการดำเนินการต่อหรือไม่?`,
+        `ไม่สามารถตรวจสอบเอกสารได้: ${error.message}\nคุณต้องการดำเนินการต่อหรือไม่?`,
         [
           { text: "ลองใหม่", style: "cancel", onPress: () => resolve(false) },
           { text: "ดำเนินการต่อ", onPress: () => resolve(true) },
@@ -298,68 +339,77 @@ const UploadScreen = ({ navigation, route }) => {
     userId,
     studentName,
     config
-  ) => {
+) => {
     try {
-      const sanitizedStudentName = studentName
-        .replace(/[.#$[\]/\\]/g, "_")
-        .replace(/\s+/g, "_");
-      const timestamp = new Date().getTime();
-      const fileExtension = file.filename?.split(".").pop() || 'unknown';
-
-      const academicYear = config?.academicYear || "2568";
-      const term = config?.term || "1";
-      const storagePath = `student_documents/${sanitizedStudentName}/${academicYear}/term_${term}/${docId}_${fileIndex}_${timestamp}.${fileExtension}`;
-
-      const response = await fetch(file.uri);
-      const blob = await response.blob();
-
-      const storageRef = ref(storage, storagePath);
-      const uploadTask = uploadBytesResumable(storageRef, blob);
-
-      return new Promise((resolve, reject) => {
-        uploadTask.on(
-          "state_changed",
-          (snapshot) => {
-            const progress =
-              (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            setStorageUploadProgress((prev) => ({
-              ...prev,
-              [`${docId}_${fileIndex}`]: Math.round(progress),
-            }));
-          },
-          (error) => {
-            console.error("Upload error:", error);
-            reject(error);
-          },
-          async () => {
-            try {
-              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-              setStorageUploadProgress((prev) => {
-                const newState = { ...prev };
-                delete newState[`${docId}_${fileIndex}`];
-                return newState;
-              });
-
-              resolve({
-                downloadURL,
-                storagePath,
-                uploadedAt: new Date().toISOString(),
-                originalFileName: file.filename || file.name || 'unknown',
-                fileSize: file.size,
-                mimeType: file.mimeType,
-                academicYear: academicYear,
-                term: term,
-                studentFolder: sanitizedStudentName,
-              });
-            } catch (error) {
-              reject(error);
-            }
-          }
-        );
-      });
+        const sanitizedStudentName = (studentName ?? 'Unknown_Student')
+            .replace(/[.#$[\]/\\]/g, "_")
+            .replace(/\s+/g, "_");
+        const timestamp = new Date().getTime();
+        
+        // Use PDF extension for converted files, or original extension
+        const fileExtension = file.convertedFromImage ? 'pdf' : (file.filename?.split(".").pop() || 'unknown');
+        
+        const academicYear = config?.academicYear || "2568";
+        const term = config?.term || "1";
+        const storagePath = `student_documents/${sanitizedStudentName}/${academicYear}/term_${term}/${docId}_${fileIndex}_${timestamp}.${fileExtension}`;
+        
+        const response = await fetch(file.uri);
+        const blob = await response.blob();
+        
+        const storageRef = ref(storage, storagePath);
+        const uploadTask = uploadBytesResumable(storageRef, blob);
+        
+        return new Promise((resolve, reject) => {
+            uploadTask.on(
+                "state_changed",
+                (snapshot) => {
+                    const progress =
+                        (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    setStorageUploadProgress((prev) => ({
+                        ...prev,
+                        [`${docId}_${fileIndex}`]: Math.round(progress),
+                    }));
+                },
+                (error) => {
+                    console.error("Upload error:", error);
+                    reject(error);
+                },
+                async () => {
+                    try {
+                        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                        setStorageUploadProgress((prev) => {
+                            const newState = { ...prev };
+                            delete newState[`${docId}_${fileIndex}`];
+                            return newState;
+                        });
+                        
+                        // ตรวจสอบและแทนที่ค่า undefined ด้วย null
+                        resolve({
+                            downloadURL: downloadURL ?? null,
+                            storagePath: storagePath ?? null,
+                            uploadedAt: new Date().toISOString() ?? null,
+                            originalFileName: file.filename ?? null,
+                            fileSize: file.size ?? null,
+                            mimeType: file.mimeType ?? null,
+                            academicYear: academicYear ?? null,
+                            term: term ?? null,
+                            studentFolder: sanitizedStudentName ?? null,
+                            // เพิ่ม conversion metadata ถ้ามี
+                            ...(file.convertedFromImage && {
+                                convertedFromImage: true,
+                                originalImageName: file.originalImageName ?? null,
+                                originalImageType: file.originalImageType ?? null,
+                            }),
+                        });
+                    } catch (error) {
+                        reject(error);
+                    }
+                }
+            );
+        });
     } catch (error) {
-      console.error("Error in uploadFileToStorage:", error);
-      throw error;
+        console.error("Error in uploadFileToStorage:", error);
+        throw error;
     }
   };
 
@@ -410,81 +460,141 @@ const UploadScreen = ({ navigation, route }) => {
     });
   };
 
-  // Updated: Handle multiple file upload with OCR validation
   const handleFileUpload = async (docId, allowMultiple = true) => {
-    try {
-      const DocumentPicker = await import("expo-document-picker");
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "*/*",
-        copyToCacheDirectory: true,
-        multiple: allowMultiple, // Enable multiple selection
-      });
+  try {
+    const DocumentPicker = await import("expo-document-picker");
+    const result = await DocumentPicker.getDocumentAsync({
+      type: "*/*",
+      copyToCacheDirectory: true,
+      multiple: allowMultiple,
+    });
+
+    if (result.canceled) return;
+
+    const files = result.assets;
+    const processedFiles = [];
+
+    if (docId === 'form_101') {
+      if (files.length > 4) {
+        Alert.alert("ข้อผิดพลาด", "เอกสาร Form 101 สามารถอัปโหลดได้สูงสุด 4 ไฟล์เท่านั้น");
+        return;
+      }
       
-      if (result.canceled) return;
+      const imagesToProcess = files.filter(file => isImageFile(file.mimeType, file.name));
+      const otherFiles = files.filter(file => !isImageFile(file.mimeType, file.name));
 
-      const files = result.assets; // This is now an array
-      const validatedFiles = [];
-
-      // Process each file
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        
-        // Check if this document needs OCR validation
-        const needsValidation = docId === "form_101" || 
-                               ["consent_student_form", "consent_father_form", "consent_mother_form"].includes(docId);
-        
-        if (needsValidation) {
-          const isValid = await performOCRValidation(file, docId);
-          if (!isValid) {
-            continue; // Skip this file if validation fails
-          }
-        }
-
-        // Add file metadata with validation status
-        const fileWithMetadata = {
-          filename: file.name,
-          uri: file.uri,
-          mimeType: file.mimeType,
-          size: file.size,
+      for (const file of otherFiles) {
+        processedFiles.push({
+          filename: file.name ?? null,
+          uri: file.uri ?? null,
+          mimeType: file.mimeType ?? null,
+          size: file.size ?? null,
           uploadDate: new Date().toLocaleString("th-TH"),
           status: "pending",
-          // OCR validation flags
-          ocrValidated: docId === "form_101",
-          consentFormOcrValidated: ["consent_student_form", "consent_father_form", "consent_mother_form"].includes(docId),
-          fileIndex: (uploads[docId] || []).length + validatedFiles.length, // Sequential index
+          ocrValidated: true,
+          fileIndex: (uploads[docId] || []).length + processedFiles.length,
+        });
+      }
+
+      if (imagesToProcess.length > 0) {
+        setIsConvertingToPDF(prev => ({
+          ...prev,
+          [`${docId}_merge`]: true
+        }));
+        
+        try {
+          const mergedPdfFile = await mergeImagesToPdf(imagesToProcess, docId);
+          processedFiles.push(mergedPdfFile);
+        } catch (error) {
+          console.error("Error merging images to PDF:", error);
+          Alert.alert("ข้อผิดพลาด", `ไม่สามารถรวมรูปภาพเป็น PDF ได้: ${error.message}`);
+          setIsConvertingToPDF(prev => {
+            const newState = { ...prev };
+            delete newState[`${docId}_merge`];
+            return newState;
+          });
+          return;
+        } finally {
+          setIsConvertingToPDF(prev => {
+            const newState = { ...prev };
+            delete newState[`${docId}_merge`];
+            return newState;
+          });
+        }
+      }
+
+    } else {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        let processedFile = file;
+        let originalMetadata = {
+          filename: file.filename ?? file.name ?? null,
+          mimeType: file.mimeType ?? null,
+          size: file.size ?? null,
+          uri: file.uri ?? null,
         };
 
-        validatedFiles.push(fileWithMetadata);
+        if (isImageFile(file.mimeType, file.name)) {
+          try {
+            // รับค่าจากฟังก์ชัน convertImageToPDF
+            const convertedPdf = await convertImageToPDF(file, docId, i);
+            // ผสานข้อมูลจากไฟล์ต้นฉบับและไฟล์ที่แปลงแล้ว
+            processedFile = {
+              ...originalMetadata,
+              ...convertedPdf,
+              filename: convertedPdf.filename, // ใช้ชื่อไฟล์ที่แปลงแล้ว
+              mimeType: 'application/pdf',    // แก้ไข mimeType เป็น PDF
+            };
+          } catch (conversionError) {
+            console.error('PDF conversion failed:', conversionError);
+            Alert.alert("การแปลงล้มเหลว", `ไม่สามารถแปลงไฟล์ "${file.name ?? 'ไม่ทราบชื่อไฟล์'}" เป็น PDF ได้ จะใช้ไฟล์ต้นฉบับแทน`);
+            processedFile = file;
+          }
+        } else {
+            processedFile = originalMetadata;
+        }
+        
+        if (docId === "another_ocr_doc") {
+            const isValid = await performOCRValidation(processedFile, docId);
+            if (!isValid) {
+              continue;
+            }
+        }
+
+        const fileWithMetadata = {
+          // ตรวจสอบและกำหนดค่าเริ่มต้นให้กับทุกคุณสมบัติ
+          filename: processedFile.filename ?? null,
+          uri: processedFile.uri ?? null,
+          mimeType: processedFile.mimeType ?? null,
+          size: processedFile.size ?? null,
+          uploadDate: new Date().toLocaleString("th-TH"),
+          status: "pending",
+          ocrValidated: docId === "form_101",
+          fileIndex: (uploads[docId] || []).length + processedFiles.length,
+          ...(processedFile.convertedFromImage !== undefined && {
+            convertedFromImage: processedFile.convertedFromImage ?? false,
+            originalImageName: processedFile.originalImageName ?? null,
+            originalImageType: processedFile.originalImageType ?? null,
+          }),
+        };
+
+        processedFiles.push(fileWithMetadata);
       }
-
-      if (validatedFiles.length === 0) {
-        return; // No valid files to add
-      }
-
-      // Update uploads state with new files
-      const newUploads = {
-        ...uploads,
-        [docId]: [...(uploads[docId] || []), ...validatedFiles],
-      };
-
-      setUploads(newUploads);
-      await saveUploadsToFirebase(newUploads);
-
-      // Show success message with validation info
-      const validationInfo = validatedFiles[0].ocrValidated ? " (ตรวจสอบ Form 101 แล้ว)" : 
-                            validatedFiles[0].consentFormOcrValidated ? " (ตรวจสอบหนังสือยินยอมแล้ว)" : "";
-      
-      Alert.alert(
-        "อัปโหลดสำเร็จ",
-        `อัปโหลดไฟล์ ${validatedFiles.length} ไฟล์สำเร็จ${validationInfo}`,
-        [{ text: "ตกลง" }]
-      );
-
-    } catch (error) {
-      Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถเลือกไฟล์ได้");
-      console.error(error);
     }
-  };
+    
+    const newUploads = {
+      ...uploads,
+      [docId]: [...(uploads[docId] || []), ...processedFiles],
+    };
+
+    setUploads(newUploads);
+    await saveUploadsToFirebase(newUploads);
+
+  } catch (error) {
+    Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถเลือกไฟล์ได้");
+    console.error(error);
+  }
+};
 
   // Updated: Handle remove specific file from document
   const handleRemoveFile = async (docId, fileIndex = null) => {
@@ -492,9 +602,10 @@ const UploadScreen = ({ navigation, route }) => {
     
     if (fileIndex !== null && fileIndex >= 0 && fileIndex < docFiles.length) {
       // Remove specific file
+      const fileToRemove = docFiles[fileIndex];
       Alert.alert(
         "ลบไฟล์",
-        `คุณต้องการลบไฟล์ "${docFiles[fileIndex].filename}" หรือไม่?`,
+        `คุณต้องการลบไฟล์ "${fileToRemove.filename}" หรือไม่?`,
         [
           { text: "ยกเลิก", style: "cancel" },
           {
@@ -502,6 +613,16 @@ const UploadScreen = ({ navigation, route }) => {
             style: "destructive",
             onPress: async () => {
               const newFiles = docFiles.filter((_, index) => index !== fileIndex);
+              
+              // Clean up temporary PDF files if they were converted from images
+              if (fileToRemove.originalImage && fileToRemove.uri) {
+                try {
+                  await FileSystem.deleteAsync(fileToRemove.uri, { idempotent: true });
+                  console.log('✓ Cleaned up temporary PDF file');
+                } catch (cleanupError) {
+                  console.warn('Could not clean up temporary file:', cleanupError);
+                }
+              }
               
               const newUploads = { ...uploads };
               if (newFiles.length === 0) {
@@ -532,6 +653,17 @@ const UploadScreen = ({ navigation, route }) => {
             text: "ลบทั้งหมด",
             style: "destructive",
             onPress: async () => {
+              // Clean up temporary PDF files
+              for (const file of docFiles) {
+                if (file.originalImage && file.uri) {
+                  try {
+                    await FileSystem.deleteAsync(file.uri, { idempotent: true });
+                  } catch (cleanupError) {
+                    console.warn('Could not clean up temporary file:', cleanupError);
+                  }
+                }
+              }
+              
               const newUploads = { ...uploads };
               delete newUploads[docId];
               setUploads(newUploads);
@@ -544,7 +676,6 @@ const UploadScreen = ({ navigation, route }) => {
     }
   };
 
-  // Updated: Handle submit documents with multiple files
   const handleSubmitDocuments = async () => {
     const documents = generateDocumentsList(surveyData);
     const requiredDocs = documents.filter((doc) => doc.required);
@@ -569,9 +700,6 @@ const UploadScreen = ({ navigation, route }) => {
         return;
       }
 
-      const storageUploads = {};
-      const uploadPromises = [];
-
       let studentName = "Unknown_Student";
       try {
         const userRef = doc(db, "users", currentUser.uid);
@@ -579,71 +707,81 @@ const UploadScreen = ({ navigation, route }) => {
         if (userDoc.exists()) {
           const userData = userDoc.data();
           studentName =
+            userData.profile?.student_name ||
             userData.name ||
             userData.nickname ||
-            `${userData.firstName || ""}_${userData.lastName || ""}`.replace(
-              "_",
-              ""
-            ) ||
             "Unknown_Student";
         }
       } catch (error) {
         console.error("Error fetching user name:", error);
       }
 
-      // Upload all files for each document
+      const storageUploads = {};
+      const academicYear = appConfig?.academicYear || "2568";
+      const term = appConfig?.term || "1";
+      
+      // อัปโหลดไฟล์ทั้งหมดสำหรับแต่ละเอกสาร และรอจนกว่าจะเสร็จ
       for (const [docId, files] of Object.entries(uploads)) {
         const uploadedFiles = [];
         
         for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
           const file = files[fileIndex];
-          const uploadPromise = uploadFileToStorage(
-            file,
-            docId,
-            fileIndex,
-            currentUser.uid,
-            studentName,
-            appConfig
-          )
-            .then((storageData) => {
-              uploadedFiles.push({
-                ...file,
-                ...storageData,
-                storageUploaded: true,
-                status: "uploaded_to_storage",
-                fileIndex,
-              });
-            })
-            .catch((error) => {
-              throw new Error(
-                `ไม่สามารถอัปโหลดไฟล์ ${file.filename} ได้: ${error.message}`
-              );
+          try {
+            const storageData = await uploadFileToStorage(
+              file,
+              docId,
+              fileIndex,
+              currentUser.uid,
+              studentName,
+              appConfig
+            );
+
+            // ผสานข้อมูลที่ได้จากการอัปโหลดกับข้อมูลต้นฉบับที่อยู่ใน state และตรวจสอบค่า undefined
+            uploadedFiles.push({
+              filename: storageData.originalFileName ?? null,
+              mimeType: storageData.mimeType ?? null,
+              size: storageData.fileSize ?? null,
+              downloadURL: storageData.downloadURL ?? null,
+              storagePath: storageData.storagePath ?? null,
+              uploadedAt: storageData.uploadedAt ?? null,
+              storageUploaded: true,
+              status: "uploaded_to_storage",
+              fileIndex: fileIndex,
+              convertedFromImage: storageData.convertedFromImage ?? false,
+              originalImageName: storageData.originalImageName ?? null,
+              originalImageType: storageData.originalImageType ?? null,
             });
 
-          uploadPromises.push(uploadPromise);
+          } catch (error) {
+            console.error(
+              `Failed to upload file ${file.filename}:`,
+              error
+            );
+            Alert.alert(
+              "ข้อผิดพลาดในการอัปโหลด",
+              `ไม่สามารถอัปโหลดไฟล์ ${file.filename} ได้: ${error.message}`
+            );
+            setIsSubmitting(false);
+            return;
+          }
         }
         
-        // Wait for all files in this document to upload before adding to storageUploads
-        await Promise.all(uploadPromises.slice(-files.length));
         storageUploads[docId] = uploadedFiles;
       }
-
+      
       const submissionData = {
-        userId: currentUser.uid,
-        userEmail: currentUser.email,
-        surveyData: surveyData,
-        uploads: storageUploads,
-        submittedAt: new Date().toISOString(),
-        status: "submitted",
-        documentStatuses: {},
-        academicYear: appConfig?.academicYear || "2568",
-        term: appConfig?.term || "1",
-        submissionTerm: `${appConfig?.academicYear || "2568"}_${
-          appConfig?.term || "1"
-        }`,
+        userId: currentUser.uid ?? null,
+        userEmail: currentUser.email ?? null,
+        surveyData: surveyData ?? null,
+        uploads: storageUploads ?? {},
+        submittedAt: new Date().toISOString() ?? null,
+        status: "submitted" ?? null,
+        academicYear: academicYear ?? null,
+        term: term ?? null,
+        submissionTerm: `${academicYear}_${term}` ?? null,
       };
 
-      // Initialize document statuses
+      submissionData.documentStatuses = {};
       Object.keys(storageUploads).forEach((docId) => {
         submissionData.documentStatuses[docId] = {
           status: "pending",
@@ -654,42 +792,42 @@ const UploadScreen = ({ navigation, route }) => {
         };
       });
 
-      const termCollectionName = `document_submissions_${
-        appConfig?.academicYear || "2568"
-      }_${appConfig?.term || "1"}`;
       const submissionRef = doc(
-        collection(db, termCollectionName),
+        db,
+        `document_submissions_${academicYear}_${term}`,
         currentUser.uid
       );
       await setDoc(submissionRef, submissionData);
 
       const userRef = doc(db, "users", currentUser.uid);
       await updateDoc(userRef, {
-        lastSubmissionAt: new Date().toISOString(),
+        lastSubmissionAt: new Date().toISOString() ?? null,
         hasSubmittedDocuments: true,
-        uploads: storageUploads,
-        lastSubmissionTerm: `${appConfig?.academicYear || "2568"}_${
-          appConfig?.term || "1"
-        }`,
+        uploads: storageUploads ?? {},
+        lastSubmissionTerm: `${academicYear}_${term}` ?? null,
       });
 
-      // Count total files submitted
       const totalFiles = Object.values(storageUploads).reduce(
         (sum, files) => sum + files.length, 0
       );
+      const convertedFiles = Object.values(storageUploads)
+        .flat()
+        .filter(file => file.convertedFromImage).length;
+
+      let successMessage = `เอกสารของคุณได้ถูกส่งและอัปโหลดเรียบร้อยแล้ว\nจำนวนไฟล์: ${totalFiles} ไฟล์`;
+      if (convertedFiles > 0) {
+        successMessage += `\nไฟล์ที่แปลงเป็น PDF: ${convertedFiles} ไฟล์`;
+      }
+      successMessage += `\nปีการศึกษา: ${academicYear} เทอม: ${term}\nคุณสามารถติดตามได้ในหน้าแสดงผล`;
 
       Alert.alert(
         "ส่งเอกสารสำเร็จ",
-        `เอกสารของคุณได้ถูกส่งและอัปโหลดเรียบร้อยแล้ว\nจำนวนไฟล์: ${totalFiles} ไฟล์\nปีการศึกษา: ${
-          appConfig?.academicYear || "2568"
-        } เทอม: ${appConfig?.term || "1"}\nคุณสามารถติดตามได้ในหน้าแสดงผล`,
+        successMessage,
         [
           {
             text: "ดูสถานะ",
             onPress: () => {
               navigation.push("DocumentStatusScreen", {
-                surveyData: surveyData,
-                uploads: storageUploads,
                 submissionData: submissionData,
               });
             },
@@ -706,7 +844,7 @@ const UploadScreen = ({ navigation, route }) => {
       setIsSubmitting(false);
       setStorageUploadProgress({});
     }
-  };
+};
 
   // Updated: Modal handlers for multiple files
   const handleShowFileModal = async (docId, docTitle, fileIndex = 0) => {
@@ -730,7 +868,6 @@ const UploadScreen = ({ navigation, route }) => {
 
   const loadFileContent = async (file) => {
     try {
-      const FileSystem = await import("expo-file-system");
       const mimeType = file.mimeType?.toLowerCase() || "";
       const fileName = file.filename?.toLowerCase() || "";
 
@@ -758,9 +895,14 @@ const UploadScreen = ({ navigation, route }) => {
         setFileContent(content);
       } else if (mimeType.includes("pdf") || fileName.endsWith(".pdf")) {
         setContentType("pdf");
-        setFileContent(
-          'ไฟล์ PDF ต้องใช้แอปพลิเคชันภายนอกในการดู คลิก "เปิดด้วยแอปภายนอก" เพื่อดูไฟล์'
-        );
+        let pdfMessage = 'ไฟล์ PDF ต้องใช้แอปพลิเคชันภายนอกในการดู คลิก "เปิดด้วยแอปภายนอก" เพื่อดูไฟล์';
+        
+        // Add info about converted files
+        if (file.originalImage) {
+          pdfMessage = `ไฟล์ PDF ที่แปลงมาจากรูปภาพ\n(ไฟล์ต้นฉบับ: ${file.originalImageName})\n\n${pdfMessage}`;
+        }
+        
+        setFileContent(pdfMessage);
       } else {
         setContentType("other");
         setFileContent(
@@ -815,12 +957,18 @@ const UploadScreen = ({ navigation, route }) => {
     // Count total files
     const totalFiles = Object.values(uploads).reduce((sum, files) => sum + files.length, 0);
     
+    // Count converted files
+    const convertedFiles = Object.values(uploads)
+      .flat()
+      .filter(file => file.originalImage).length;
+    
     return {
       total: documents.length,
       required: requiredDocs.length,
       uploaded: uploadedDocs.length,
       uploadedRequired: uploadedRequiredDocs.length,
       totalFiles: totalFiles,
+      convertedFiles: convertedFiles,
     };
   };
 
@@ -855,10 +1003,11 @@ const UploadScreen = ({ navigation, route }) => {
 
       <ProgressCard stats={stats} />
 
-      {Object.keys(storageUploadProgress).length > 0 && (
+      {(Object.keys(storageUploadProgress).length > 0 || Object.keys(isConvertingToPDF).length > 0) && (
         <StorageProgressCard
           storageUploadProgress={storageUploadProgress}
           uploads={uploads}
+          isConvertingToPDF={isConvertingToPDF}
         />
       )}
 
@@ -871,7 +1020,8 @@ const UploadScreen = ({ navigation, route }) => {
         onDownloadDocument={handleDocumentDownload}
         formatFileSize={formatFileSize}
         isValidatingOCR={isValidatingOCR}
-        ocrBackendAvailable={ocrBackendAvailable || consentFormOcrBackendAvailable}
+        ocrBackendAvailable={ocrBackendAvailable}
+        isConvertingToPDF={isConvertingToPDF}
       />
 
       <SubmitSection
