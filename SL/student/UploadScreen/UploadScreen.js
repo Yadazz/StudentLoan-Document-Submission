@@ -1,4 +1,4 @@
-// UploadScreen.js (Main component - Updated for multiple files per document)
+// UploadScreen.js (Main component - Updated with ConsentFormOcr support)
 import { useState, useEffect } from "react";
 import {
   View,
@@ -25,6 +25,14 @@ import {
   showValidationAlert,
   checkOCRBackendStatus,
 } from "./documents_ocr/Form101Ocr";
+
+// Import ConsentForm OCR validation
+import {
+  validateConsentFormDocument,
+  validateConsentByType,
+  showConsentFormValidationAlert,
+  checkConsentFormOCRBackendStatus,
+} from "./documents_ocr/ConsentFormOcr";
 
 // Import refactored components
 import LoadingScreen from "./components/LoadingScreen";
@@ -63,14 +71,24 @@ const UploadScreen = ({ navigation, route }) => {
   // OCR related states
   const [isValidatingOCR, setIsValidatingOCR] = useState({});
   const [ocrBackendAvailable, setOcrBackendAvailable] = useState(false);
+  const [consentFormOcrBackendAvailable, setConsentFormOcrBackendAvailable] = useState(false);
 
   // Check OCR backend status on component mount
   useEffect(() => {
     const checkOCRStatus = async () => {
-      const isAvailable = await checkOCRBackendStatus();
-      setOcrBackendAvailable(isAvailable);
-      if (!isAvailable) {
-        console.warn("OCR backend is not available");
+      // Check Form 101 OCR backend
+      const form101Available = await checkOCRBackendStatus();
+      setOcrBackendAvailable(form101Available);
+      
+      // Check Consent Form OCR backend
+      const consentFormAvailable = await checkConsentFormOCRBackendStatus();
+      setConsentFormOcrBackendAvailable(consentFormAvailable);
+      
+      if (!form101Available) {
+        console.warn("Form 101 OCR backend is not available");
+      }
+      if (!consentFormAvailable) {
+        console.warn("Consent Form OCR backend is not available");
       }
     };
     checkOCRStatus();
@@ -177,12 +195,34 @@ const UploadScreen = ({ navigation, route }) => {
     }
   };
 
-  // OCR validation function
+  // Helper function to determine consent type from document ID
+  const getConsentTypeFromDocId = (docId) => {
+    const typeMap = {
+      consent_student_form: "student",
+      consent_father_form: "father", 
+      consent_mother_form: "mother",
+    };
+    return typeMap[docId] || "general";
+  };
+
+  // Updated OCR validation function with consent form support
   const performOCRValidation = async (file, docId) => {
-    if (!ocrBackendAvailable) {
+    const isForm101 = docId === "form_101";
+    const isConsentForm = ["consent_student_form", "consent_father_form", "consent_mother_form"].includes(docId);
+    
+    // Check if this document requires OCR validation
+    if (!isForm101 && !isConsentForm) {
+      return true; // No validation needed for other document types
+    }
+
+    // Check backend availability
+    const backendAvailable = isForm101 ? ocrBackendAvailable : consentFormOcrBackendAvailable;
+    
+    if (!backendAvailable) {
+      const documentType = isForm101 ? "Form 101" : "หนังสือยินยอม";
       Alert.alert(
         "ระบบ OCR ไม่พร้อมใช้งาน",
-        "ไม่สามารถตรวจสอบเอกสารได้ในขณะนี้ คุณสามารถดำเนินการต่อได้",
+        `ไม่สามารถตรวจสอบ${documentType}ได้ในขณะนี้ คุณสามารถดำเนินการต่อได้`,
         [{ text: "ตกลง" }]
       );
       return true; // Allow to continue if OCR is not available
@@ -191,26 +231,50 @@ const UploadScreen = ({ navigation, route }) => {
     setIsValidatingOCR((prev) => ({ ...prev, [docId]: true }));
 
     try {
-      const validationResult = await validateForm101Document(file.uri);
-
-      return new Promise((resolve) => {
-        showValidationAlert(
-          validationResult,
-          () => {
-            console.log("✓ OCR Validation passed for", file.name);
-            resolve(true);
-          },
-          () => {
-            console.log("✗ OCR Validation failed for", file.name);
-            resolve(false);
-          }
-        );
-      });
+      let validationResult;
+      
+      if (isForm101) {
+        // Use Form 101 OCR validation
+        validationResult = await validateForm101Document(file.uri);
+        
+        return new Promise((resolve) => {
+          showValidationAlert(
+            validationResult,
+            () => {
+              console.log("✓ Form 101 OCR Validation passed for", file.name);
+              resolve(true);
+            },
+            () => {
+              console.log("✗ Form 101 OCR Validation failed for", file.name);
+              resolve(false);
+            }
+          );
+        });
+      } else if (isConsentForm) {
+        // Use Consent Form OCR validation
+        const consentType = getConsentTypeFromDocId(docId);
+        validationResult = await validateConsentByType(file.uri, consentType);
+        
+        return new Promise((resolve) => {
+          showConsentFormValidationAlert(
+            validationResult,
+            () => {
+              console.log("✓ Consent Form OCR Validation passed for", file.name, "type:", consentType);
+              resolve(true);
+            },
+            () => {
+              console.log("✗ Consent Form OCR Validation failed for", file.name, "type:", consentType);
+              resolve(false);
+            }
+          );
+        });
+      }
     } catch (error) {
       console.error("OCR validation error:", error);
+      const documentType = isForm101 ? "Form 101" : "หนังสือยินยอม";
       Alert.alert(
         "เกิดข้อผิดพลาดในการตรวจสอบ",
-        `ไม่สามารถตรวจสอบเอกสารได้: ${error.message}\nคุณต้องการดำเนินการต่อหรือไม่?`,
+        `ไม่สามารถตรวจสอบ${documentType}ได้: ${error.message}\nคุณต้องการดำเนินการต่อหรือไม่?`,
         [
           { text: "ลองใหม่", style: "cancel", onPress: () => resolve(false) },
           { text: "ดำเนินการต่อ", onPress: () => resolve(true) },
@@ -365,15 +429,18 @@ const UploadScreen = ({ navigation, route }) => {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         
-        // Check if this is a Form 101 document that needs OCR validation
-        if (docId === "form_101") {
+        // Check if this document needs OCR validation
+        const needsValidation = docId === "form_101" || 
+                               ["consent_student_form", "consent_father_form", "consent_mother_form"].includes(docId);
+        
+        if (needsValidation) {
           const isValid = await performOCRValidation(file, docId);
           if (!isValid) {
             continue; // Skip this file if validation fails
           }
         }
 
-        // Add file metadata
+        // Add file metadata with validation status
         const fileWithMetadata = {
           filename: file.name,
           uri: file.uri,
@@ -381,7 +448,9 @@ const UploadScreen = ({ navigation, route }) => {
           size: file.size,
           uploadDate: new Date().toLocaleString("th-TH"),
           status: "pending",
+          // OCR validation flags
           ocrValidated: docId === "form_101",
+          consentFormOcrValidated: ["consent_student_form", "consent_father_form", "consent_mother_form"].includes(docId),
           fileIndex: (uploads[docId] || []).length + validatedFiles.length, // Sequential index
         };
 
@@ -401,10 +470,13 @@ const UploadScreen = ({ navigation, route }) => {
       setUploads(newUploads);
       await saveUploadsToFirebase(newUploads);
 
-      // Show success message
+      // Show success message with validation info
+      const validationInfo = validatedFiles[0].ocrValidated ? " (ตรวจสอบ Form 101 แล้ว)" : 
+                            validatedFiles[0].consentFormOcrValidated ? " (ตรวจสอบหนังสือยินยอมแล้ว)" : "";
+      
       Alert.alert(
         "อัปโหลดสำเร็จ",
-        `อัปโหลดไฟล์ ${validatedFiles.length} ไฟล์สำเร็จ`,
+        `อัปโหลดไฟล์ ${validatedFiles.length} ไฟล์สำเร็จ${validationInfo}`,
         [{ text: "ตกลง" }]
       );
 
@@ -799,7 +871,7 @@ const UploadScreen = ({ navigation, route }) => {
         onDownloadDocument={handleDocumentDownload}
         formatFileSize={formatFileSize}
         isValidatingOCR={isValidatingOCR}
-        ocrBackendAvailable={ocrBackendAvailable}
+        ocrBackendAvailable={ocrBackendAvailable || consentFormOcrBackendAvailable}
       />
 
       <SubmitSection
