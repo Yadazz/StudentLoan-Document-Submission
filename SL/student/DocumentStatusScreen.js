@@ -415,21 +415,22 @@ const DocumentStatusScreen = ({ route, navigation }) => {
               <Text style={styles.documentTitle}>
                 {getDocumentDisplayName(docId)}
               </Text>
-              <View style={styles.filesCountBadge}>
-                <Text style={styles.filesCountText}>{files.length} ไฟล์</Text>
-              </View>
+
             </View>
-            
-            <View style={[styles.statusBadge, { backgroundColor: statusInfo.bgColor }]}>
-              <Ionicons 
-                name={statusInfo.icon} 
-                size={16} 
-                color={statusInfo.color} 
-                style={styles.statusIcon} 
-              />
-              <Text style={[styles.statusText, { color: statusInfo.textColor }]}>
-                {statusInfo.text}
-              </Text>
+
+            {/* Files count and status badge on the next line */}
+            <View style={styles.documentFooter}>
+              <View style={[styles.statusBadge, { backgroundColor: statusInfo.bgColor }]}>
+                <Ionicons
+                  name={statusInfo.icon}
+                  size={16}
+                  color={statusInfo.color}
+                  style={styles.statusIcon}
+                />
+                <Text style={[styles.statusText, { color: statusInfo.textColor }]}>
+                  {statusInfo.text}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -460,8 +461,6 @@ const DocumentStatusScreen = ({ route, navigation }) => {
                         </View>
                       )}
                     </View>
-                    
-                    <Text style={styles.fileIndex}>#{index + 1}</Text>
                   </TouchableOpacity>
                   
                   <View style={styles.fileDetails}>
@@ -508,17 +507,33 @@ const DocumentStatusScreen = ({ route, navigation }) => {
   // Helper function to get document display name
   const getDocumentDisplayName = (docId) => {
     const docNames = {
-      'form_101': 'แบบฟอร์ม 101',
-      'consent_student_form': 'หนังสือยินยอมนักศึกษา',
-      'consent_father_form': 'หนังสือยินยอมบิดา',
-      'consent_mother_form': 'หนังสือยินยอมมารดา',
+      'form_101': 'กยศ 101',
+      'volunteer_doc' : 'เอกสารจิตอาสา',
+      'id_copies_student': 'สำเนาบัตรประชาชนนักศึกษา',
+      'consent_student_form': 'หนังสือยินยอมเปิดเผยข้อมูลนักศึกษา',
+      'consent_father_form': 'หนังสือยินยอมเปิดเผยข้อมูลบิดา',
+      'id_copies_father': 'สำเนาบัตรประชาชนบิดา',
+      'consent_mother_form': 'หนังสือยินยอมเปิดเผยข้อมูลมารดา',
+      'id_copies_mother': 'สำเนาบัตรประชาชนมารดา',
+      'guardian_consent' : 'หนังสือยินยอมเปิดเผยข้อมูลผู้ปกครอง',
       'guardian_income_cert': 'หนังสือรับรองรายได้ผู้ปกครอง',
       'father_income_cert': 'หนังสือรับรองรายได้บิดา',
+      'fa_id_copies_gov' : 'สำเนาบัตรข้าราชการผู้รับรอง',
       'mother_income_cert': 'หนังสือรับรองรายได้มารดา',
-      'single_parent_income_cert': 'หนังสือรับรองรายได้ผู้ปกครองเดียว',
+      'mo_id_copies_gov' : 'สำเนาบัตรข้าราชการผู้รับรอง',
+      'single_parent_income_cert': 'หนังสือรับรองรายได้',
+      'single_parent_income': 'หนังสือรับรองเงินเดือน',
       'famo_income_cert': 'หนังสือรับรองรายได้บิดามารดา',
+      'famo_id_copies_gov': 'สำเนาบัตรข้าราชการผู้รับรอง',
       'family_status_cert': 'หนังสือรับรองสถานภาพครอบครัว',
-      // เพิ่มรายการอื่นๆ ตามต้องการ
+      'father_income': 'หนังสือรับรองเงินเดือนบิดา',
+      'mother_income': 'หนังสือรับรองเงินเดือนมารดา',
+      'legal_status' : 'สำเนาใบหย่า (กรณีหย่าร้าง) หรือ สำเนาใบมรณบัตร (กรณีเสียชีวิต)',
+      'fam_id_copies_gov' : 'สำเนาบัตรข้าราชการผู้รับรอง',
+      '102_id_copies_gov' : 'สำเนาบัตรข้าราชการผู้รับรอง',
+      'guardian_id_copies' : 'สำเนาบัตรประชาชนผู้ปกครอง',
+      'guardian_income' : 'หนังสือรับรองเงินเดือนผู้ปกครอง',
+      'guar_id_copies_gov' : 'สำเนาบัตรข้าราชการผู้รับรอง',
     };
     return docNames[docId] || docId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
@@ -844,10 +859,15 @@ const styles = StyleSheet.create({
     borderLeftColor: "#2563eb",
   },
   documentHeader: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'left',
     marginBottom: 12,
+  },
+  documentFooter: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
   },
   documentTitleContainer: {
     flexDirection: 'row',
@@ -904,7 +924,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   filePreview: {
-    alignItems: 'center',
+    alignItems: 'left',
     marginBottom: 8,
   },
   fileIconContainer: {
@@ -921,11 +941,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#d1fae5",
     borderRadius: 8,
     padding: 2,
-  },
-  fileIndex: {
-    fontSize: 10,
-    color: "#6b7280",
-    fontWeight: "500",
   },
   fileDetails: {
     alignItems: 'center',
