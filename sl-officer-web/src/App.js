@@ -10,6 +10,9 @@ import PostScreen from "./PostScreen.web";
 import AllPostsScreen from "./AllPostsScreen";
 import PostEditScreen from "./PostEditScreen.web";
 import StudentInfo from "./Studentinfo";
+import StudentDocument from "./StdDocumentService";
+import DocumentSubmission from "./StudentDocumentSubmission";
+
 export default function App() {
   return (
     <Router>
@@ -22,6 +25,11 @@ export default function App() {
             <Route path="/all-posts" element={<AllPostsScreen />} />
             <Route path="/edit" element={<PostEditScreen />} />
             <Route path="/studentinfo" element={<StudentInfo />} />
+            <Route path="/docs" element={<StudentDocument />} />
+            <Route
+              path="/document-submission"
+              element={<DocumentSubmission />}
+            />
           </Routes>
         </div>
       </div>
@@ -33,6 +41,7 @@ export default function App() {
 function Sidebar() {
   const navigate = useNavigate();
   const [openPosts, setOpenPosts] = useState(false);
+  const [openDocuments, setOpenDocuments] = useState(false);
   const [selected, setSelected] = useState("home");
 
   const handleNavigate = (path, key) => {
@@ -93,11 +102,37 @@ function Sidebar() {
         )}
       </div>
 
-      <SidebarItem
-        label="เอกสารนักศึกษา"
-        active={selected === "docs"}
-        onClick={() => handleNavigate("/docs", "docs")}
-      />
+      <div>
+        <SidebarItem
+          label="เอกสาร"
+          active={openDocuments}
+          onClick={() => setOpenDocuments(!openDocuments)}
+        />
+        {openDocuments && (
+          <div style={{ marginLeft: 20 }}>
+            <SidebarItem
+              label="ระบบจัดการการส่งเอกสาร"
+              active={selected === "docs"}
+              onClick={() => handleNavigate("/docs", "docs")}
+            />
+            <SidebarItem
+              label="เอกสารนักศึกษา"
+              active={selected === "DocumentSubmission"}
+              onClick={() =>
+                handleNavigate("/document-submission", "DocumentSubmission")
+              }
+            />
+          </div>
+        )}
+      </div>
+
+      <div>
+        <SidebarItem
+          label="แก้ไขโพสต์"
+          active={selected === "editPost"}
+          onClick={() => handleNavigate("/edit", "editPost")}
+        />
+      </div>
     </div>
   );
 }
