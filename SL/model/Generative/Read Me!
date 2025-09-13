@@ -1,0 +1,15 @@
+1.package.json ในประมาณบรรทัดที่ 5 จะมีโค้ดแบบนี้
+    
+    "name": "sl",
+    "version": "1.0.0",
+    "main": "index.js",
+
+ให้ใส่   "type": "module", เพิ่มไปจะได้แบบนี้
+
+    "name": "sl",
+    "version": "1.0.0",
+    "main": "index.js",
+    "type": "module",
+
+2.ต้องสร้างไฟล์ .env ด้วยตัวเองเท่านั้น แล้วค่อน API_KEY ไปวางด้วยตัวเอง
+3.ติดตั้ง npm install @google/generative-ai
