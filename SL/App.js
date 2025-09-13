@@ -20,7 +20,7 @@ import LoginScreen from "./LoginScreen";
 import SignUpScreen from "./SignUpScreen";
 import InsertForm from "./student/InsertForm";
 import OCR from "./model/EasyOcr/OCR";
-import DocumentStatusScreen from "./student/DocumentStatusScreen";
+import DocumentStatusScreen from "./student/DocumentStatusScreen/DocumentStatusScreen";
 import DocCooldown from "./student/components/DocCooldown";
 
 const Tab = createBottomTabNavigator();
@@ -82,7 +82,7 @@ const UploadStack = () => {
         component={DocumentStatusScreen}
         options={{
           title: "สถานะเอกสาร",
-          headerShown: true,
+          headerShown: false,
           headerStyle: {
             backgroundColor: "#2563eb",
           },
