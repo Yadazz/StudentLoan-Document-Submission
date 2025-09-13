@@ -184,7 +184,7 @@ const UploadScreen = ({ navigation, route }) => {
     }
   };
 
-  // Function to check if file is an image
+
   const isImageFile = (mimeType, filename) => {
     const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp', 'image/webp'];
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
@@ -221,18 +221,23 @@ const UploadScreen = ({ navigation, route }) => {
       <html>
       <head>
           <style>
-              /* กำหนดขนาดหน้ากระดาษและขอบให้ไม่มีเลย */
               @page {
                 margin: 0;
+                size: A4;
               }
               body {
                 margin: 0;
                 padding: 0;
+                width: 100%;
+                height: 100%;
+                display: flex;
+                justify-content: center;
+                align-items: center;
               }
               img {
-                width: 100vw;
-                height: 100vh;
-                object-fit: contain; /* ปรับขนาดรูปให้พอดีหน้ากระดาษ */
+                max-width: 100%;
+                max-height: 100%;
+                object-fit: contain;
                 display: block;
               }
           </style>
@@ -281,6 +286,7 @@ const UploadScreen = ({ navigation, route }) => {
     });
   }
 };
+
 
   // OCR validation function
   const performOCRValidation = async (file, docId) => {
