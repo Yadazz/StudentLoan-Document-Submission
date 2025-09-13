@@ -8,19 +8,6 @@ export const mergeImagesToPdf = async (imageFiles, docId) => {
   }
 
   try {
-    const htmlImages = imageFiles.map((file, index) => {
-      const isLastImage = index === imageFiles.length - 1;
-      // ใช้แท็ก div เพื่อสร้างการขึ้นหน้าใหม่
-      const pageBreakDiv = isLastImage ? '' : '<div style="page-break-after: always;"></div>';
-      
-      const imgTag = `
-        <div>
-          <img src="data:${file.mimeType || 'image/jpeg'};base64,${file.base64Content}" style="width:100%; height:auto; display:block;" />
-        </div>
-      `;
-      return imgTag + pageBreakDiv;
-    });
-
     // อ่านไฟล์รูปภาพเป็น base64 ในขั้นตอนเดียว
     const filesWithBase64 = await Promise.all(imageFiles.map(async (file) => {
       const base64Content = await FileSystem.readAsStringAsync(file.uri, {
@@ -28,34 +15,37 @@ export const mergeImagesToPdf = async (imageFiles, docId) => {
       });
       return { ...file, base64Content };
     }));
-    
+
     const combinedHtmlContent = `
       <!DOCTYPE html>
       <html>
       <head>
           <style>
-              /* กำหนดขนาดหน้ากระดาษและขอบให้ไม่มีเลย */
               @page {
                 margin: 0;
+                size: A4;
               }
               body {
                 margin: 0;
                 padding: 0;
+                width: 100%;
+                height: 100%;
               }
               img {
-                width: 100vw;
-                height: 100vh;
+                max-width: 100%;
+                max-height: 100%;
                 object-fit: contain;
                 display: block;
+                page-break-after: always;
+              }
+              img:last-of-type {
+                page-break-after: never;
               }
           </style>
       </head>
       <body>
-          ${filesWithBase64.map((file, index) => {
-            const isLastImage = index === filesWithBase64.length - 1;
-            // ใช้คุณสมบัติ page-break-after บนรูปภาพโดยตรง
-            const pageBreakStyle = isLastImage ? '' : 'page-break-after: always;';
-            return `<img src="data:${file.mimeType || 'image/jpeg'};base64,${file.base64Content}" style="width:100%; height:auto; display:block; ${pageBreakStyle}" />`;
+          ${filesWithBase64.map((file) => {
+            return `<img src="data:${file.mimeType || 'image/jpeg'};base64,${file.base64Content}" />`;
           }).join('')}
       </body>
       </html>
