@@ -1,4 +1,3 @@
-// UploadScreen.js (Complete version - Updated with AI validation instead of OCR)
 import { useState, useEffect } from "react";
 import {
   View,
@@ -202,90 +201,88 @@ const UploadScreen = ({ navigation, route }) => {
 
   // Function to convert image to PDF
   const convertImageToPDF = async (imageFile, docId, fileIndex) => {
-    try {
-      setIsConvertingToPDF(prev => ({
-        ...prev,
-        [`${docId}_${fileIndex}`]: true
-      }));
+  try {
+    setIsConvertingToPDF((prev) => ({
+      ...prev,
+      [`${docId}_${fileIndex}`]: true,
+    }));
 
-      // อ่านรูปภาพเป็น base64
-      const base64Image = await FileSystem.readAsStringAsync(imageFile.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+    const base64Image = await FileSystem.readAsStringAsync(imageFile.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
 
-      const mimeType = imageFile.mimeType || 'image/jpeg';
-      const base64DataUri = `data:${mimeType};base64,${base64Image}`;
+    const mimeType = imageFile.mimeType || 'image/jpeg';
+    const base64DataUri = `data:${mimeType};base64,${base64Image}`;
 
-      const htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                @page {
-                  margin: 0;
-                  size: A4;
-                }
-                body {
-                  margin: 0;
-                  padding: 0;
-                  width: 100%;
-                  height: 100%;
-                  display: flex;
-                  justify-content: center;
-                  align-items: center;
-                }
-                img {
-                  max-width: 100%;
-                  max-height: 100%;
-                  object-fit: contain;
-                  display: block;
-                }
-            </style>
-        </head>
-        <body>
-            <img src="${base64DataUri}" />
-        </body>
-        </html>
-      `;
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          @page {
+            margin: 0;
+            size: A4;
+          }
+          body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+          }
+          img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: block;
+          }
+        </style>
+      </head>
+      <body>
+        <img src="${base64DataUri}" />
+      </body>
+      </html>
+    `;
 
-      // แปลง HTML เป็น PDF
-      const { uri: pdfUri } = await Print.printToFileAsync({
-        html: htmlContent,
-        base64: false,
-      });
+    const { uri: pdfUri } = await Print.printToFileAsync({
+      html: htmlContent,
+      base64: false,
+    });
 
-      const pdfInfo = await FileSystem.getInfoAsync(pdfUri);
-      const originalName = imageFile.filename || imageFile.name || 'image';
-      const nameWithoutExtension = originalName.replace(/\.[^/.]+$/, '');
+    const pdfInfo = await FileSystem.getInfoAsync(pdfUri);
+    const originalName = imageFile.filename || imageFile.name || 'image';
+    const nameWithoutExtension = originalName.replace(/\.[^/.]+$/, "");
 
-      // สร้างอ็อบเจกต์ไฟล์ PDF ใหม่ พร้อมคุณสมบัติที่จำเป็นทั้งหมด
-      const pdfFile = {
-        filename: `${nameWithoutExtension}_converted.pdf`,
-        uri: pdfUri,
-        mimeType: 'application/pdf',
-        size: pdfInfo.size,
-        uploadDate: new Date().toLocaleString("th-TH"),
-        status: "pending",
-        aiValidated: ["form_101", "consent_student_form", "consent_father_form", "consent_mother_form"].includes(docId),
-        fileIndex: fileIndex,
-        convertedFromImage: true,
-        originalImageName: imageFile.filename ?? null,
-        originalImageType: imageFile.mimeType ?? null,
-      };
+    // ตั้งชื่อไฟล์ PDF โดยใช้ docId และ fileIndex
+    const pdfFile = {
+      filename: `${docId}.pdf`,  // ตั้งชื่อไฟล์โดยใช้ docId และ fileIndex
+      uri: pdfUri,
+      mimeType: 'application/pdf',
+      size: pdfInfo.size,
+      uploadDate: new Date().toLocaleString("th-TH"),
+      status: "pending",
+      ocrValidated: docId === "form_101",
+      fileIndex: fileIndex,
+      convertedFromImage: true,
+      originalImageName: imageFile.filename ?? null,
+      originalImageType: imageFile.mimeType ?? null,
+    };
 
-      return pdfFile;
+    return pdfFile;
+  } catch (error) {
+    console.error("Error converting image to PDF:", error);
+    throw new Error(`ไม่สามารถแปลงรูปภาพเป็น PDF ได้: ${error.message}`);
+  } finally {
+    setIsConvertingToPDF((prev) => {
+      const newState = { ...prev };
+      delete newState[`${docId}_${fileIndex}`];
+      return newState;
+    });
+  }
+};
 
-    } catch (error) {
-      console.error('Error converting image to PDF:', error);
-      throw new Error(`ไม่สามารถแปลงรูปภาพเป็น PDF ได้: ${error.message}`);
-    } finally {
-      setIsConvertingToPDF(prev => {
-        const newState = { ...prev };
-        delete newState[`${docId}_${fileIndex}`];
-        return newState;
-      });
-    }
-  };
 
   // AI validation function - CHANGED FROM OCR TO AI
   const performAIValidation = async (file, docId) => {
@@ -355,20 +352,20 @@ const UploadScreen = ({ navigation, route }) => {
     fileIndex,
     userId,
     studentName,
-    config
+    config,
+    studentId
 ) => {
     try {
         const sanitizedStudentName = (studentName ?? 'Unknown_Student')
             .replace(/[.#$[\]/\\]/g, "_")
             .replace(/\s+/g, "_");
-        const timestamp = new Date().getTime();
         
         // Use PDF extension for converted files, or original extension
         const fileExtension = file.convertedFromImage ? 'pdf' : (file.filename?.split(".").pop() || 'unknown');
         
         const academicYear = config?.academicYear || "2568";
         const term = config?.term || "1";
-        const storagePath = `student_documents/${sanitizedStudentName}/${academicYear}/term_${term}/${docId}_${fileIndex}_${timestamp}.${fileExtension}`;
+        const storagePath = `student_documents/${sanitizedStudentName}/${academicYear}/term_${term}/${studentId}_${docId}.${fileExtension}`;
         
         const response = await fetch(file.uri);
         const blob = await response.blob();
@@ -695,174 +692,189 @@ const UploadScreen = ({ navigation, route }) => {
   };
 
   const handleSubmitDocuments = async () => {
-    const documents = generateDocumentsList(surveyData);
-    const requiredDocs = documents.filter((doc) => doc.required);
-    const uploadedRequiredDocs = requiredDocs.filter((doc) => uploads[doc.id] && uploads[doc.id].length > 0);
+  const documents = generateDocumentsList(surveyData);
+  const requiredDocs = documents.filter((doc) => doc.required);
+  const uploadedRequiredDocs = requiredDocs.filter((doc) => uploads[doc.id] && uploads[doc.id].length > 0);
 
-    if (uploadedRequiredDocs.length < requiredDocs.length) {
-      Alert.alert(
-        "เอกสารไม่ครบ",
-        `คุณยังอัปโหลดเอกสารไม่ครบ (${uploadedRequiredDocs.length}/${requiredDocs.length})`,
-        [{ text: "ตกลง" }]
-      );
+  if (uploadedRequiredDocs.length < requiredDocs.length) {
+    Alert.alert(
+      "เอกสารไม่ครบ",
+      `คุณยังอัปโหลดเอกสารไม่ครบ (${uploadedRequiredDocs.length}/${requiredDocs.length})`,
+      [{ text: "ตกลง" }]
+    );
+    return;
+  }
+
+  setIsSubmitting(true);
+
+  try {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      Alert.alert("เกิดข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้");
+      setIsSubmitting(false);
       return;
     }
 
-    setIsSubmitting(true);
-
+    let studentId = "Unknown_Student";  // Default value if student_id is not found
     try {
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        Alert.alert("เกิดข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้");
-        setIsSubmitting(false);
-        return;
+      const userRef = doc(db, "users", currentUser.uid); // ดึงข้อมูลผู้ใช้จาก Firestore
+      const userDoc = await getDoc(userRef);
+
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        studentId = userData.student_id || "Unknown_Student"; // ดึง student_id
       }
-
-      let studentName = "Unknown_Student";
-      try {
-        const userRef = doc(db, "users", currentUser.uid);
-        const userDoc = await getDoc(userRef);
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          studentName =
-            userData.profile?.student_name ||
-            userData.name ||
-            userData.nickname ||
-            "Unknown_Student";
-        }
-      } catch (error) {
-        console.error("Error fetching user name:", error);
-      }
-
-      const storageUploads = {};
-      const academicYear = appConfig?.academicYear || "2568";
-      const term = appConfig?.term || "1";
-      
-      // อัปโหลดไฟล์ทั้งหมดสำหรับแต่ละเอกสาร และรอจนกว่าจะเสร็จ
-      for (const [docId, files] of Object.entries(uploads)) {
-        const uploadedFiles = [];
-        
-        for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
-          const file = files[fileIndex];
-          try {
-            const storageData = await uploadFileToStorage(
-              file,
-              docId,
-              fileIndex,
-              currentUser.uid,
-              studentName,
-              appConfig
-            );
-
-            // ผสานข้อมูลที่ได้จากการอัปโหลดกับข้อมูลต้นฉบับที่อยู่ใน state และตรวจสอบค่า undefined
-            uploadedFiles.push({
-              filename: storageData.originalFileName ?? null,
-              mimeType: storageData.mimeType ?? null,
-              size: storageData.fileSize ?? null,
-              downloadURL: storageData.downloadURL ?? null,
-              storagePath: storageData.storagePath ?? null,
-              uploadedAt: storageData.uploadedAt ?? null,
-              storageUploaded: true,
-              status: "uploaded_to_storage",
-              fileIndex: fileIndex,
-              convertedFromImage: storageData.convertedFromImage ?? false,
-              originalImageName: storageData.originalImageName ?? null,
-              originalImageType: storageData.originalImageType ?? null,
-            });
-
-          } catch (error) {
-            console.error(
-              `Failed to upload file ${file.filename}:`,
-              error
-            );
-            Alert.alert(
-              "ข้อผิดพลาดในการอัปโหลด",
-              `ไม่สามารถอัปโหลดไฟล์ ${file.filename} ได้: ${error.message}`
-            );
-            setIsSubmitting(false);
-            return;
-          }
-        }
-        
-        storageUploads[docId] = uploadedFiles;
-      }
-      
-      const submissionData = {
-        userId: currentUser.uid ?? null,
-        userEmail: currentUser.email ?? null,
-        surveyData: surveyData ?? null,
-        uploads: storageUploads ?? {},
-        submittedAt: new Date().toISOString() ?? null,
-        status: "submitted" ?? null,
-        academicYear: academicYear ?? null,
-        term: term ?? null,
-        submissionTerm: `${academicYear}_${term}` ?? null,
-      };
-
-      submissionData.documentStatuses = {};
-      Object.keys(storageUploads).forEach((docId) => {
-        submissionData.documentStatuses[docId] = {
-          status: "pending",
-          reviewedAt: null,
-          reviewedBy: null,
-          comments: "",
-          fileCount: storageUploads[docId].length,
-        };
-      });
-
-      const submissionRef = doc(
-        db,
-        `document_submissions_${academicYear}_${term}`,
-        currentUser.uid
-      );
-      await setDoc(submissionRef, submissionData);
-
-      const userRef = doc(db, "users", currentUser.uid);
-      await updateDoc(userRef, {
-        lastSubmissionAt: new Date().toISOString() ?? null,
-        hasSubmittedDocuments: true,
-        uploads: storageUploads ?? {},
-        lastSubmissionTerm: `${academicYear}_${term}` ?? null,
-      });
-
-      const totalFiles = Object.values(storageUploads).reduce(
-        (sum, files) => sum + files.length, 0
-      );
-      const convertedFiles = Object.values(storageUploads)
-        .flat()
-        .filter(file => file.convertedFromImage).length;
-
-      let successMessage = `เอกสารของคุณได้ถูกส่งและอัปโหลดเรียบร้อยแล้ว\nจำนวนไฟล์: ${totalFiles} ไฟล์`;
-      if (convertedFiles > 0) {
-        successMessage += `\nไฟล์ที่แปลงเป็น PDF: ${convertedFiles} ไฟล์`;
-      }
-      successMessage += `\nปีการศึกษา: ${academicYear} เทอม: ${term}\nคุณสามารถติดตามได้ในหน้าแสดงผล`;
-
-      Alert.alert(
-        "ส่งเอกสารสำเร็จ",
-        successMessage,
-        [
-          {
-            text: "ดูสถานะ",
-            onPress: () => {
-              navigation.push("DocumentStatusScreen", {
-                submissionData: submissionData,
-              });
-            },
-          },
-        ]
-      );
     } catch (error) {
-      console.error("Error submitting documents:", error);
-      Alert.alert(
-        "เกิดข้อผิดพลาด",
-        `ไม่สามารถส่งเอกสารได้: ${error.message}\nกรุณาลองใหม่อีกครั้ง`
-      );
-    } finally {
-      setIsSubmitting(false);
-      setStorageUploadProgress({});
+      console.error("Error fetching student_id:", error);
     }
+
+    let studentName = "Unknown_Student";  // Default value if student name is not found
+    try {
+      const userRef = doc(db, "users", currentUser.uid);
+      const userDoc = await getDoc(userRef);
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        studentName =
+          userData.profile?.student_name ||
+          userData.name ||
+          userData.nickname ||
+          "Unknown_Student";
+      }
+    } catch (error) {
+      console.error("Error fetching user name:", error);
+    }
+
+    const storageUploads = {};
+    const academicYear = appConfig?.academicYear || "2568";
+    const term = appConfig?.term || "1";
+    
+    // อัปโหลดไฟล์ทั้งหมดสำหรับแต่ละเอกสาร และรอจนกว่าจะเสร็จ
+    for (const [docId, files] of Object.entries(uploads)) {
+      const uploadedFiles = [];
+      
+      for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+        const file = files[fileIndex];
+        try {
+          const storageData = await uploadFileToStorage(
+            file,
+            docId,
+            fileIndex,
+            currentUser.uid,
+            studentName,
+            appConfig,
+            studentId  // ส่ง studentId ไปยังฟังก์ชัน uploadFileToStorage
+          );
+
+          // ผสานข้อมูลที่ได้จากการอัปโหลดกับข้อมูลต้นฉบับที่อยู่ใน state และตรวจสอบค่า undefined
+          uploadedFiles.push({
+            filename: storageData.originalFileName ?? null,
+            mimeType: storageData.mimeType ?? null,
+            size: storageData.fileSize ?? null,
+            downloadURL: storageData.downloadURL ?? null,
+            storagePath: storageData.storagePath ?? null,
+            uploadedAt: storageData.uploadedAt ?? null,
+            storageUploaded: true,
+            status: "uploaded_to_storage",
+            fileIndex: fileIndex,
+            convertedFromImage: storageData.convertedFromImage ?? false,
+            originalImageName: storageData.originalImageName ?? null,
+            originalImageType: storageData.originalImageType ?? null,
+          });
+
+        } catch (error) {
+          console.error(
+            `Failed to upload file ${file.filename}:`,
+            error
+          );
+          Alert.alert(
+            "ข้อผิดพลาดในการอัปโหลด",
+            `ไม่สามารถอัปโหลดไฟล์ ${file.filename} ได้: ${error.message}`
+          );
+          setIsSubmitting(false);
+          return;
+        }
+      }
+      
+      storageUploads[docId] = uploadedFiles;
+    }
+    
+    const submissionData = {
+      userId: currentUser.uid ?? null,
+      userEmail: currentUser.email ?? null,
+      surveyData: surveyData ?? null,
+      uploads: storageUploads ?? {},
+      submittedAt: new Date().toISOString() ?? null,
+      status: "submitted" ?? null,
+      academicYear: academicYear ?? null,
+      term: term ?? null,
+      submissionTerm: `${academicYear}_${term}` ?? null,
+    };
+
+    submissionData.documentStatuses = {};
+    Object.keys(storageUploads).forEach((docId) => {
+      submissionData.documentStatuses[docId] = {
+        status: "pending",
+        reviewedAt: null,
+        reviewedBy: null,
+        comments: "",
+        fileCount: storageUploads[docId].length,
+      };
+    });
+
+    const submissionRef = doc(
+      db,
+      `document_submissions_${academicYear}_${term}`,
+      currentUser.uid
+    );
+    await setDoc(submissionRef, submissionData);
+
+    const userRef = doc(db, "users", currentUser.uid);
+    await updateDoc(userRef, {
+      lastSubmissionAt: new Date().toISOString() ?? null,
+      hasSubmittedDocuments: true,
+      uploads: storageUploads ?? {},
+      lastSubmissionTerm: `${academicYear}_${term}` ?? null,
+    });
+
+    const totalFiles = Object.values(storageUploads).reduce(
+      (sum, files) => sum + files.length, 0
+    );
+    const convertedFiles = Object.values(storageUploads)
+      .flat()
+      .filter(file => file.convertedFromImage).length;
+
+    let successMessage = `เอกสารของคุณได้ถูกส่งและอัปโหลดเรียบร้อยแล้ว\nจำนวนไฟล์: ${totalFiles} ไฟล์`;
+    if (convertedFiles > 0) {
+      successMessage += `\nไฟล์ที่แปลงเป็น PDF: ${convertedFiles} ไฟล์`;
+    }
+    successMessage += `\nปีการศึกษา: ${academicYear} เทอม: ${term}\nคุณสามารถติดตามได้ในหน้าแสดงผล`;
+
+    Alert.alert(
+      "ส่งเอกสารสำเร็จ",
+      successMessage,
+      [
+        {
+          text: "ดูสถานะ",
+          onPress: () => {
+            navigation.push("DocumentStatusScreen", {
+              submissionData: submissionData,
+            });
+          },
+        },
+      ]
+    );
+  } catch (error) {
+    console.error("Error submitting documents:", error);
+    Alert.alert(
+      "เกิดข้อผิดพลาด",
+      `ไม่สามารถส่งเอกสารได้: ${error.message}\nกรุณาลองใหม่อีกครั้ง`
+    );
+  } finally {
+    setIsSubmitting(false);
+    setStorageUploadProgress({});
+  }
 };
+
 
   // Updated: Modal handlers for multiple files
   const handleShowFileModal = async (docId, docTitle, fileIndex = 0) => {
