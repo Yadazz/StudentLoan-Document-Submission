@@ -59,7 +59,7 @@ export const mergeImagesToPdf = async (imageFiles, docId) => {
     const pdfInfo = await FileSystem.getInfoAsync(pdfUri);
     
     // ตั้งชื่อไฟล์สำหรับ PDF ที่รวมแล้ว
-    const mergedFileName = `${docId}_merged_${Date.now()}.pdf`;
+    const mergedFileName = `${docId}.pdf`;
 
     const mergedPdfFile = {
       filename: mergedFileName,
