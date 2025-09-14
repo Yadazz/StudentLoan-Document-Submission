@@ -18,7 +18,7 @@ console.log('- API Key configured:', !!GEMINI_API_KEY);
 
 // Initialize Gemini AI for client-side processing
 const initializeGemini = () => {
-  if (!genAI && GEMINI_API_KEY && GEMINI_API_KEY !== 'AIzaSyB0IPMGQrR08mWLThXDALeaQqwpI1y9Wgw') {
+  if (!genAI && GEMINI_API_KEY && GEMINI_API_KEY !== 'xxxxxxxxxxxxxxxxxxxx') {
     try {
       genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
       model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" }); // Updated model name
