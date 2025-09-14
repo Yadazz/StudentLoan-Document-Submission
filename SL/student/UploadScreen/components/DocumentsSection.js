@@ -1,4 +1,4 @@
-// components/DocumentsSection.js - Updated with multiple files support
+// components/DocumentsSection.js - Updated with AI validation support
 import React from "react";
 import {
   View,
@@ -18,19 +18,40 @@ const DocumentsSection = ({
   onShowFileModal,
   onDownloadDocument,
   formatFileSize,
-  isValidatingOCR = {},
-  ocrBackendAvailable = false,
+  isValidatingAI = {},
+  aiBackendAvailable = false,
+  isConvertingToPDF = {},
 }) => {
+  // เอกสารที่มี AI validation
+  const AI_ENABLED_DOCUMENTS = [
+    "form_101",
+    "consent_student_form", 
+    "consent_father_form",
+    "consent_mother_form",
+  ];
+
   const renderDocumentActions = (doc) => {
     const docFiles = uploads[doc.id] || [];
 
-    // Show validation spinner for OCR checking
-    if (isValidatingOCR[doc.id]) {
+    // Show validation spinner for AI checking
+    if (isValidatingAI[doc.id]) {
       return (
         <View style={styles.actionButtons}>
           <View style={styles.validatingButton}>
-            <ActivityIndicator size="small" color="#f59e0b" />
-            <Text style={styles.validatingText}>ตรวจสอบ...</Text>
+            <ActivityIndicator size="small" color="#8b5cf6" />
+            <Text style={styles.validatingText}>กำลังตรวจสอบด้วย AI...</Text>
+          </View>
+        </View>
+      );
+    }
+
+    // Show PDF conversion spinner
+    if (isConvertingToPDF[doc.id] || isConvertingToPDF[`${doc.id}_merge`]) {
+      return (
+        <View style={styles.actionButtons}>
+          <View style={styles.convertingButton}>
+            <ActivityIndicator size="small" color="#06b6d4" />
+            <Text style={styles.convertingText}>กำลังแปลงเป็น PDF...</Text>
           </View>
         </View>
       );
@@ -130,13 +151,8 @@ const DocumentsSection = ({
                   {formatFileSize(file.size)}
                 </Text>
                 
-                {/* OCR validation badge for Form 101 files */}
-                {doc.id === "form_101" && file.ocrValidated && (
-                  <View style={styles.ocrValidatedBadge}>
-                    <Ionicons name="shield-checkmark" size={10} color="#10b981" />
-                    <Text style={styles.ocrValidatedText}>ตรวจสอบแล้ว</Text>
-                  </View>
-                )}
+                {/* AI validation badges */}
+                {renderAIValidationBadge(doc, file)}
               </View>
               
               <TouchableOpacity
@@ -150,6 +166,43 @@ const DocumentsSection = ({
         </ScrollView>
       </View>
     );
+  };
+
+  const renderAIValidationBadge = (doc, file) => {
+    // AI validation badge for Form 101 files
+    if (doc.id === "form_101" && file.aiValidated) {
+      return (
+        <View style={styles.aiValidatedBadge}>
+          <Ionicons name="sparkles" size={10} color="#8b5cf6" />
+          <Text style={styles.aiValidatedText}>AI ตรวจสอบแล้ว</Text>
+        </View>
+      );
+    }
+
+    // AI validation badge for consent form files
+    if (
+      ["consent_student_form", "consent_father_form", "consent_mother_form"].includes(doc.id) && 
+      file.aiValidated
+    ) {
+      return (
+        <View style={styles.consentAiValidatedBadge}>
+          <Ionicons name="shield-checkmark" size={10} color="#059669" />
+          <Text style={styles.consentAiValidatedText}>ยินยอม AI ตรวจสอบแล้ว</Text>
+        </View>
+      );
+    }
+
+    // Show converted from image badge
+    if (file.convertedFromImage) {
+      return (
+        <View style={styles.convertedBadge}>
+          <Ionicons name="image" size={10} color="#0ea5e9" />
+          <Text style={styles.convertedText}>แปลงจากรูปภาพ</Text>
+        </View>
+      );
+    }
+
+    return null;
   };
 
   const renderDocumentStatusBadge = (doc) => {
@@ -200,15 +253,56 @@ const DocumentsSection = ({
     }
   };
 
+  const getAIBadgeForDocument = (docId) => {
+    if (docId === "form_101") {
+      return (
+        <View style={styles.aiBadge}>
+          <Ionicons name="sparkles-outline" size={12} color="#8b5cf6" />
+          <Text style={styles.aiBadgeText}>AI ตรวจสอบ</Text>
+        </View>
+      );
+    }
+
+    if (["consent_student_form", "consent_father_form", "consent_mother_form"].includes(docId)) {
+      return (
+        <View style={[styles.aiBadge, styles.consentAiBadge]}>
+          <Ionicons name="shield-checkmark-outline" size={12} color="#059669" />
+          <Text style={[styles.aiBadgeText, styles.consentAiBadgeText]}>ยินยอม AI</Text>
+        </View>
+      );
+    }
+
+    return null;
+  };
+
+  const renderAIUnavailableWarning = (doc) => {
+    if (!AI_ENABLED_DOCUMENTS.includes(doc.id)) return null;
+    if (aiBackendAvailable) return null;
+    
+    const docFiles = uploads[doc.id] || [];
+    if (docFiles.length === 0) return null;
+
+    const warningText = doc.id === "form_101" 
+      ? "AI ไม่พร้อมใช้งาน"
+      : "AI ตรวจสอบยินยอมไม่พร้อมใช้งาน";
+
+    return (
+      <View style={styles.aiUnavailableBadge}>
+        <Ionicons name="warning-outline" size={12} color="#f59e0b" />
+        <Text style={styles.aiUnavailableText}>{warningText}</Text>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.documentsSection}>
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>รายการเอกสาร</Text>
-        {!ocrBackendAvailable && (
-          <View style={styles.ocrStatusWarning}>
+        {!aiBackendAvailable && (
+          <View style={styles.aiStatusWarning}>
             <Ionicons name="warning-outline" size={16} color="#f59e0b" />
-            <Text style={styles.ocrStatusText}>
-              ระบบตรวจสอบเอกสารไม่พร้อมใช้งาน
+            <Text style={styles.aiStatusText}>
+              ระบบ AI ตรวจสอบเอกสารไม่พร้อมใช้งาน
             </Text>
           </View>
         )}
@@ -245,12 +339,7 @@ const DocumentsSection = ({
                       <Text style={styles.requiredMark}> *</Text>
                     )}
                   </Text>
-                  {doc.id === "form_101" && (
-                    <View style={styles.ocrBadge}>
-                      <Ionicons name="scan-outline" size={12} color="#8b5cf6" />
-                      <Text style={styles.ocrBadgeText}>OCR</Text>
-                    </View>
-                  )}
+                  {getAIBadgeForDocument(doc.id)}
                 </View>
 
                 {doc.description && (
@@ -261,13 +350,8 @@ const DocumentsSection = ({
 
                 {renderDocumentStatusBadge(doc)}
 
-                {/* OCR backend unavailable warning for Form 101 */}
-                {doc.id === "form_101" && !ocrBackendAvailable && uploads[doc.id]?.length > 0 && (
-                  <View style={styles.ocrUnavailableBadge}>
-                    <Ionicons name="warning-outline" size={12} color="#f59e0b" />
-                    <Text style={styles.ocrUnavailableText}>ไม่ได้ตรวจสอบ OCR</Text>
-                  </View>
-                )}
+                {/* AI backend unavailable warning */}
+                {renderAIUnavailableWarning(doc)}
               </View>
             </View>
           </View>
@@ -305,7 +389,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     color: "#1e293b",
   },
-  ocrStatusWarning: {
+  aiStatusWarning: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fef3c7",
@@ -314,7 +398,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#f59e0b",
   },
-  ocrStatusText: {
+  aiStatusText: {
     fontSize: 12,
     color: "#92400e",
     marginLeft: 4,
@@ -358,7 +442,7 @@ const styles = StyleSheet.create({
     color: "#ef4444",
     fontWeight: "bold",
   },
-  ocrBadge: {
+  aiBadge: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#f3f4f6",
@@ -367,12 +451,20 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     borderColor: "#8b5cf6",
+    marginRight: 6,
   },
-  ocrBadgeText: {
+  aiBadgeText: {
     fontSize: 10,
     color: "#8b5cf6",
     fontWeight: "600",
     marginLeft: 2,
+  },
+  consentAiBadge: {
+    backgroundColor: "#ecfdf5",
+    borderColor: "#059669",
+  },
+  consentAiBadgeText: {
+    color: "#059669",
   },
   documentDescription: {
     fontSize: 13,
@@ -396,7 +488,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 4,
   },
-  ocrUnavailableBadge: {
+  aiUnavailableBadge: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fef3c7",
@@ -406,7 +498,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     alignSelf: "flex-start",
   },
-  ocrUnavailableText: {
+  aiUnavailableText: {
     fontSize: 11,
     color: "#92400e",
     fontWeight: "600",
@@ -468,7 +560,22 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     textAlign: "center",
   },
-  ocrValidatedBadge: {
+  aiValidatedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f3e8ff",
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  aiValidatedText: {
+    fontSize: 9,
+    color: "#7c3aed",
+    fontWeight: "600",
+    marginLeft: 2,
+  },
+  consentAiValidatedBadge: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#d1fae5",
@@ -477,9 +584,24 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginTop: 4,
   },
-  ocrValidatedText: {
+  consentAiValidatedText: {
     fontSize: 9,
     color: "#065f46",
+    fontWeight: "600",
+    marginLeft: 2,
+  },
+  convertedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#e0f2fe",
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  convertedText: {
+    fontSize: 9,
+    color: "#0369a1",
     fontWeight: "600",
     marginLeft: 2,
   },
@@ -534,17 +656,35 @@ const styles = StyleSheet.create({
   validatingButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fef3c7",
+    backgroundColor: "#f3e8ff",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#f59e0b",
-    minWidth: 100,
+    borderColor: "#8b5cf6",
+    minWidth: 120,
     justifyContent: "center",
   },
   validatingText: {
-    color: "#92400e",
+    color: "#7c3aed",
+    fontSize: 12,
+    fontWeight: "600",
+    marginLeft: 4,
+  },
+  convertingButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#e0f2fe",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#06b6d4",
+    minWidth: 120,
+    justifyContent: "center",
+  },
+  convertingText: {
+    color: "#0891b2",
     fontSize: 12,
     fontWeight: "600",
     marginLeft: 4,
