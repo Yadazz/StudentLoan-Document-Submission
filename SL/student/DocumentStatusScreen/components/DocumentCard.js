@@ -1,10 +1,47 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import StatusBadge from './StatusBadge';
 import FileItem from './FileItem';
+import { getAuth } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../../database/firebase';
 
 const DocumentCard = ({ docId, filesData, submissionData, onFilePress, onReupload }) => {
+  const [userData, setUserData] = useState(null);
+
+  // ดึงข้อมูลจาก Firestore เมื่อ component โหลดครั้งแรก
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const currentUser = getAuth().currentUser;
+      if (!currentUser) {
+        Alert.alert("ข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้");
+        return;
+      }
+
+      const userRef = doc(db, "users", currentUser.uid);
+      const userSnap = await getDoc(userRef);
+      
+      if (userSnap.exists()) {
+        const userInfo = userSnap.data();
+        setUserData({
+          survey: userInfo.survey || null,  // เก็บข้อมูล survey
+        });
+      } else {
+        Alert.alert("ข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้ในฐานข้อมูล");
+      }
+    };
+
+    fetchUserData();
+  }, []);
+
+  // เช็คข้อมูล 'livingWith' ใน survey และแสดงชื่อเอกสาร
   const getDocumentDisplayName = (docId) => {
+    if (!userData) return 'กำลังโหลดข้อมูล...';
+
+    const livingWith = userData?.survey?.livingWith || 'Unknown'; // ถ้าไม่มีข้อมูลจะใช้ "ไม่ระบุ"
+    const livingWithText = livingWith === 'บิดา' ? 'บิดา' : (livingWith === 'มารดา' ? 'มารดา' : 'ไม่ระบุ');
+
     const docNames = {
       'form_101': 'กยศ 101',
       'volunteer_doc' : 'เอกสารจิตอาสา',
@@ -36,7 +73,14 @@ const DocumentCard = ({ docId, filesData, submissionData, onFilePress, onReuploa
       'guardian_income' : 'หนังสือรับรองเงินเดือนผู้ปกครอง',
       'guar_id_copies_gov' : 'สำเนาบัตรข้าราชการผู้รับรอง',
     };
-    return docNames[docId] || docId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+    // เพิ่มข้อความ 'บิดา' หรือ 'มารดา' สำหรับเอกสาร 'single_parent_income_cert' และ 'single_parent_income'
+    if (docId === 'single_parent_income_cert' || docId === 'single_parent_income') {
+      return `${docNames[docId]}ของ${livingWithText}`;
+    }
+
+    // สำหรับเอกสารทั่วไป
+    return `${docNames[docId] || docId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`;
   };
 
   // รองรับทั้ง single file และ multiple files
