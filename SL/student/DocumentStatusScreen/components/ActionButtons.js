@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const ActionButtons = ({ 
@@ -6,41 +6,43 @@ const ActionButtons = ({
   onHome, 
   onDelete, 
   refreshing = false, 
+  disabled = false, 
   showDelete = true 
 }) => {
   return (
-    <View style={styles.actionSection}>
+    <View style={styles.actionButtons}>
       <TouchableOpacity
-        style={styles.refreshButton}
+        style={[styles.actionButton, styles.refreshButton, (refreshing || disabled) && styles.disabledButton]}
         onPress={onRefresh}
-        disabled={refreshing}
+        disabled={refreshing || disabled}
       >
-        <Ionicons 
-          name="refresh-outline" 
-          size={20} 
-          color="#2563eb" 
-          style={refreshing ? styles.spinning : null} 
-        />
-        <Text style={styles.refreshButtonText}>
-          {refreshing ? 'กำลังอัปเดต...' : 'อัปเดตสถานะ'}
+        {refreshing ? (
+          <ActivityIndicator size="small" color="#ffffff" />
+        ) : (
+          <Ionicons name="refresh-outline" size={20} color="#ffffff" />
+        )}
+        <Text style={styles.actionButtonText}>
+          {refreshing ? "กำลังโหลด..." : "รีเฟรช"}
         </Text>
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={styles.homeButton}
+        style={[styles.actionButton, styles.homeButton, disabled && styles.disabledButton]}
         onPress={onHome}
+        disabled={disabled}
       >
         <Ionicons name="home-outline" size={20} color="#ffffff" />
-        <Text style={styles.homeButtonText}>กลับไปหน้าหลัก</Text>
+        <Text style={styles.actionButtonText}>หน้าหลัก</Text>
       </TouchableOpacity>
 
       {showDelete && (
         <TouchableOpacity
-          style={[styles.homeButton, styles.deleteButton]}
+          style={[styles.actionButton, styles.deleteButton, disabled && styles.disabledButton]}
           onPress={onDelete}
+          disabled={disabled}
         >
-          <Ionicons name="trash-outline" size={20} color="#fff" />
-          <Text style={styles.homeButtonText}>ลบเอกสารทั้งหมด</Text>
+          <Ionicons name="trash-outline" size={20} color="#ffffff" />
+          <Text style={styles.actionButtonText}>ลบทั้งหมด</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -48,45 +50,39 @@ const ActionButtons = ({
 };
 
 const styles = StyleSheet.create({
-  actionSection: {
-    flexDirection: 'column',
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    marginBottom: 20,
     gap: 12,
-    marginBottom: 30,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    minHeight: 48,
   },
   refreshButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: "#eff6ff",
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#2563eb",
-  },
-  refreshButtonText: {
-    color: "#2563eb",
-    fontSize: 14,
-    fontWeight: "600",
-    marginLeft: 8,
-  },
-  spinning: {
-    // Add rotation animation if needed
+    backgroundColor: '#3b82f6',
   },
   homeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: "#2563eb",
-    paddingVertical: 12,
-    borderRadius: 12,
+    backgroundColor: '#10b981',
   },
   deleteButton: {
-    backgroundColor: "#ef4444",
+    backgroundColor: '#ef4444',
   },
-  homeButtonText: {
-    color: "#ffffff",
+  disabledButton: {
+    opacity: 0.6,
+  },
+  actionButtonText: {
+    color: '#ffffff',
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: '600',
     marginLeft: 8,
   },
 });
