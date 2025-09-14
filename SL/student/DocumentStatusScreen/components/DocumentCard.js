@@ -1,9 +1,9 @@
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import StatusBadge from './StatusBadge';
 import FileItem from './FileItem';
 
-const DocumentCard = ({ docId, filesData, submissionData, onFilePress }) => {
+const DocumentCard = ({ docId, filesData, submissionData, onFilePress, onReupload }) => {
   const getDocumentDisplayName = (docId) => {
     const docNames = {
       'form_101': 'กยศ 101',
@@ -11,9 +11,11 @@ const DocumentCard = ({ docId, filesData, submissionData, onFilePress }) => {
       'id_copies_student': 'สำเนาบัตรประชาชนนักศึกษา',
       'consent_student_form': 'หนังสือยินยอมเปิดเผยข้อมูลนักศึกษา',
       'consent_father_form': 'หนังสือยินยอมเปิดเผยข้อมูลบิดา',
+      'id_copies_consent_father_form':'สำเนาบัตรประชาชนมารดา',
       'id_copies_father': 'สำเนาบัตรประชาชนบิดา',
       'consent_mother_form': 'หนังสือยินยอมเปิดเผยข้อมูลมารดา',
       'id_copies_mother': 'สำเนาบัตรประชาชนมารดา',
+      'id_copies_consent_mother_form':'สำเนาบัตรประชาชนมารดา',
       'guardian_consent' : 'หนังสือยินยอมเปิดเผยข้อมูลผู้ปกครอง',
       'guardian_income_cert': 'หนังสือรับรองรายได้ผู้ปกครอง',
       'father_income_cert': 'หนังสือรับรองรายได้บิดา',
@@ -41,6 +43,9 @@ const DocumentCard = ({ docId, filesData, submissionData, onFilePress }) => {
   const files = Array.isArray(filesData) ? filesData : [filesData];
   const docStatus = submissionData.documentStatuses?.[docId]?.status || files[0]?.status || "pending";
   const reviewComments = submissionData.documentStatuses?.[docId]?.comments || "";
+
+  // ตรวจสอบว่าเอกสารนี้ถูกปฏิเสธหรือไม่
+  const isRejected = docStatus === "rejected";
 
   return (
     <View style={styles.documentCard}>
@@ -81,6 +86,19 @@ const DocumentCard = ({ docId, filesData, submissionData, onFilePress }) => {
           <Text style={styles.commentText}>{reviewComments}</Text>
         </View>
       ) : null}
+
+      {/* Reupload button for rejected documents */}
+      {isRejected && onReupload && (
+        <View style={styles.reuploadSection}>
+          <TouchableOpacity
+            style={styles.reuploadButton}
+            onPress={() => onReupload(docId, getDocumentDisplayName(docId))}
+          >
+            <Ionicons name="cloud-upload-outline" size={20} color="#ffffff" />
+            <Text style={styles.reuploadButtonText}>อัปโหลดใหม่</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
@@ -138,6 +156,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6b7280",
     lineHeight: 20,
+  },
+  reuploadSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+  },
+  reuploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: "#ef4444",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  reuploadButtonText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 8,
   },
 });
 
