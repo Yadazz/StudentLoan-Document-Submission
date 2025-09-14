@@ -86,6 +86,7 @@ const styles = StyleSheet.create({
     padding: 10,
     minWidth: 120,
     alignItems: 'center',
+    flexDirection: 'row',
   },
   filePreview: {
     alignItems: 'left',
@@ -107,17 +108,20 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   fileDetails: {
-    alignItems: 'center',
+    paddingHorizontal: 16,
+    alignItems: 'left',
     width: '100%',
   },
   fileName: {
+    paddingHorizontal: 16,
+    alignItems: 'left',
     fontSize: 11,
     fontWeight: "500",
     color: "#374151",
     marginBottom: 2,
-    textAlign: 'center',
   },
   fileSize: {
+    paddingHorizontal: 16,
     fontSize: 10,
     color: "#9ca3af",
     marginBottom: 2,
@@ -138,9 +142,10 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   uploadDate: {
+    paddingHorizontal: 16,
+    alignItems: 'left',
     fontSize: 9,
     color: "#9ca3af",
-    textAlign: 'center',
   },
 });
 
