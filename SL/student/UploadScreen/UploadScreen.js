@@ -1,4 +1,4 @@
-// UploadScreen.js (Main component - Updated with PDF conversion for images)
+// UploadScreen.js (Complete version - Updated with AI validation instead of OCR)
 import { useState, useEffect } from "react";
 import {
   View,
@@ -23,12 +23,13 @@ import * as Print from 'expo-print';
 import * as FileSystem from 'expo-file-system';
 import { mergeImagesToPdf } from './utils/pdfMerger';
 
-// Import OCR validation
+// Import AI validation - CHANGED FROM OCR TO AI
 import {
   validateForm101Document,
+  validateConsentForm,
   showValidationAlert,
-  checkOCRBackendStatus,
-} from "./documents_ocr/Form101Ocr";
+  checkAIBackendStatus,
+} from "./documents_ai/ConsentFormAI";
 
 // Import refactored components
 import LoadingScreen from "./components/LoadingScreen";
@@ -64,23 +65,23 @@ const UploadScreen = ({ navigation, route }) => {
   const [storageUploadProgress, setStorageUploadProgress] = useState({});
   const [appConfig, setAppConfig] = useState(null);
 
-  // OCR related states
-  const [isValidatingOCR, setIsValidatingOCR] = useState({});
-  const [ocrBackendAvailable, setOcrBackendAvailable] = useState(false);
+  // AI related states - CHANGED FROM OCR TO AI
+  const [isValidatingAI, setIsValidatingAI] = useState({});
+  const [aiBackendAvailable, setAiBackendAvailable] = useState(false);
 
   // New state for PDF conversion
   const [isConvertingToPDF, setIsConvertingToPDF] = useState({});
 
-  // Check OCR backend status on component mount
+  // Check AI backend status on component mount - CHANGED FROM OCR TO AI
   useEffect(() => {
-    const checkOCRStatus = async () => {
-      const isAvailable = await checkOCRBackendStatus();
-      setOcrBackendAvailable(isAvailable);
+    const checkAIStatus = async () => {
+      const isAvailable = await checkAIBackendStatus();
+      setAiBackendAvailable(isAvailable);
       if (!isAvailable) {
-        console.warn("OCR backend is not available");
+        console.warn("AI backend is not available");
       }
     };
-    checkOCRStatus();
+    checkAIStatus();
   }, []);
 
   // Fetch app configuration
@@ -184,7 +185,6 @@ const UploadScreen = ({ navigation, route }) => {
     }
   };
 
-
   const isImageFile = (mimeType, filename) => {
     const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp', 'image/webp'];
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
@@ -202,126 +202,137 @@ const UploadScreen = ({ navigation, route }) => {
 
   // Function to convert image to PDF
   const convertImageToPDF = async (imageFile, docId, fileIndex) => {
-  try {
-    setIsConvertingToPDF(prev => ({
-      ...prev,
-      [`${docId}_${fileIndex}`]: true
-    }));
+    try {
+      setIsConvertingToPDF(prev => ({
+        ...prev,
+        [`${docId}_${fileIndex}`]: true
+      }));
 
-    // อ่านรูปภาพเป็น base64
-    const base64Image = await FileSystem.readAsStringAsync(imageFile.uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+      // อ่านรูปภาพเป็น base64
+      const base64Image = await FileSystem.readAsStringAsync(imageFile.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
 
-    const mimeType = imageFile.mimeType || 'image/jpeg';
-    const base64DataUri = `data:${mimeType};base64,${base64Image}`;
+      const mimeType = imageFile.mimeType || 'image/jpeg';
+      const base64DataUri = `data:${mimeType};base64,${base64Image}`;
 
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-          <style>
-              @page {
-                margin: 0;
-                size: A4;
-              }
-              body {
-                margin: 0;
-                padding: 0;
-                width: 100%;
-                height: 100%;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-              }
-              img {
-                max-width: 100%;
-                max-height: 100%;
-                object-fit: contain;
-                display: block;
-              }
-          </style>
-      </head>
-      <body>
-          <img src="${base64DataUri}" />
-      </body>
-      </html>
-    `;
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                @page {
+                  margin: 0;
+                  size: A4;
+                }
+                body {
+                  margin: 0;
+                  padding: 0;
+                  width: 100%;
+                  height: 100%;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                }
+                img {
+                  max-width: 100%;
+                  max-height: 100%;
+                  object-fit: contain;
+                  display: block;
+                }
+            </style>
+        </head>
+        <body>
+            <img src="${base64DataUri}" />
+        </body>
+        </html>
+      `;
 
-    // แปลง HTML เป็น PDF
-    const { uri: pdfUri } = await Print.printToFileAsync({
-      html: htmlContent,
-      base64: false,
-    });
+      // แปลง HTML เป็น PDF
+      const { uri: pdfUri } = await Print.printToFileAsync({
+        html: htmlContent,
+        base64: false,
+      });
 
-    const pdfInfo = await FileSystem.getInfoAsync(pdfUri);
-    const originalName = imageFile.filename || imageFile.name || 'image';
-    const nameWithoutExtension = originalName.replace(/\.[^/.]+$/, '');
+      const pdfInfo = await FileSystem.getInfoAsync(pdfUri);
+      const originalName = imageFile.filename || imageFile.name || 'image';
+      const nameWithoutExtension = originalName.replace(/\.[^/.]+$/, '');
 
-    // สร้างอ็อบเจกต์ไฟล์ PDF ใหม่ พร้อมคุณสมบัติที่จำเป็นทั้งหมด
-    const pdfFile = {
-      filename: `${nameWithoutExtension}_converted.pdf`,
-      uri: pdfUri,
-      mimeType: 'application/pdf',
-      size: pdfInfo.size,
-      uploadDate: new Date().toLocaleString("th-TH"),
-      status: "pending",
-      ocrValidated: docId === "form_101",
-      fileIndex: fileIndex,
-      convertedFromImage: true,
-      originalImageName: imageFile.filename ?? null,
-      originalImageType: imageFile.mimeType ?? null,
-    };
+      // สร้างอ็อบเจกต์ไฟล์ PDF ใหม่ พร้อมคุณสมบัติที่จำเป็นทั้งหมด
+      const pdfFile = {
+        filename: `${nameWithoutExtension}_converted.pdf`,
+        uri: pdfUri,
+        mimeType: 'application/pdf',
+        size: pdfInfo.size,
+        uploadDate: new Date().toLocaleString("th-TH"),
+        status: "pending",
+        aiValidated: ["form_101", "consent_student_form", "consent_father_form", "consent_mother_form"].includes(docId),
+        fileIndex: fileIndex,
+        convertedFromImage: true,
+        originalImageName: imageFile.filename ?? null,
+        originalImageType: imageFile.mimeType ?? null,
+      };
 
-    return pdfFile;
+      return pdfFile;
 
-  } catch (error) {
-    console.error('Error converting image to PDF:', error);
-    throw new Error(`ไม่สามารถแปลงรูปภาพเป็น PDF ได้: ${error.message}`);
-  } finally {
-    setIsConvertingToPDF(prev => {
-      const newState = { ...prev };
-      delete newState[`${docId}_${fileIndex}`];
-      return newState;
-    });
-  }
-};
+    } catch (error) {
+      console.error('Error converting image to PDF:', error);
+      throw new Error(`ไม่สามารถแปลงรูปภาพเป็น PDF ได้: ${error.message}`);
+    } finally {
+      setIsConvertingToPDF(prev => {
+        const newState = { ...prev };
+        delete newState[`${docId}_${fileIndex}`];
+        return newState;
+      });
+    }
+  };
 
-
-  // OCR validation function
-  const performOCRValidation = async (file, docId) => {
-    if (!ocrBackendAvailable) {
+  // AI validation function - CHANGED FROM OCR TO AI
+  const performAIValidation = async (file, docId) => {
+    if (!aiBackendAvailable) {
       Alert.alert(
-        "ระบบ OCR ไม่พร้อมใช้งาน",
-        "ไม่สามารถตรวจสอบเอกสารได้ในขณะนี้ คุณสามารถดำเนินการต่อได้",
+        "ระบบ AI ไม่พร้อมใช้งาน",
+        "ไม่สามารถตรวจสอบเอกสารด้วย AI ได้ในขณะนี้ คุณสามารถดำเนินการต่อได้",
         [{ text: "ตกลง" }]
       );
-      return true; // Allow to continue if OCR is not available
+      return true; // Allow to continue if AI is not available
     }
 
-    setIsValidatingOCR((prev) => ({ ...prev, [docId]: true }));
+    setIsValidatingAI((prev) => ({ ...prev, [docId]: true }));
 
     try {
-      const validationResult = await validateForm101Document(file.uri);
+      let validationResult;
+
+      // Choose validation method based on document type
+      if (docId === "form_101") {
+        validationResult = await validateForm101Document(file.uri, file.mimeType);
+      } else if (["consent_student_form", "consent_father_form", "consent_mother_form"].includes(docId)) {
+        const formType = docId === "consent_student_form" ? "student" : 
+                        docId === "consent_father_form" ? "father" : "mother";
+        validationResult = await validateConsentForm(file.uri, formType, file.mimeType);
+      } else {
+        // For other documents, skip AI validation
+        return true;
+      }
 
       return new Promise((resolve) => {
         showValidationAlert(
           validationResult,
           () => {
-            console.log("✓ OCR Validation passed for", file.name);
+            console.log("✓ AI Validation passed for", file.filename);
             resolve(true);
           },
           () => {
-            console.log("✗ OCR Validation failed for", file.name);
+            console.log("✗ AI Validation failed for", file.filename);
             resolve(false);
           }
         );
       });
     } catch (error) {
-      console.error("OCR validation error:", error);
+      console.error("AI validation error:", error);
       Alert.alert(
         "เกิดข้อผิดพลาดในการตรวจสอบ",
-        `ไม่สามารถตรวจสอบเอกสารได้: ${error.message}\nคุณต้องการดำเนินการต่อหรือไม่?`,
+        `ไม่สามารถตรวจสอบเอกสารด้วย AI ได้: ${error.message}\nคุณต้องการดำเนินการต่อหรือไม่?`,
         [
           { text: "ลองใหม่", style: "cancel", onPress: () => resolve(false) },
           { text: "ดำเนินการต่อ", onPress: () => resolve(true) },
@@ -329,7 +340,7 @@ const UploadScreen = ({ navigation, route }) => {
       );
       return false;
     } finally {
-      setIsValidatingOCR((prev) => {
+      setIsValidatingAI((prev) => {
         const newState = { ...prev };
         delete newState[docId];
         return newState;
@@ -497,7 +508,7 @@ const UploadScreen = ({ navigation, route }) => {
           size: file.size ?? null,
           uploadDate: new Date().toLocaleString("th-TH"),
           status: "pending",
-          ocrValidated: true,
+          aiValidated: true,
           fileIndex: (uploads[docId] || []).length + processedFiles.length,
         });
       }
@@ -560,8 +571,9 @@ const UploadScreen = ({ navigation, route }) => {
             processedFile = originalMetadata;
         }
         
-        if (docId === "another_ocr_doc") {
-            const isValid = await performOCRValidation(processedFile, docId);
+        // AI validation for specific document types - CHANGED FROM OCR TO AI
+        if (["form_101", "consent_student_form", "consent_father_form", "consent_mother_form"].includes(docId)) {
+            const isValid = await performAIValidation(processedFile, docId);
             if (!isValid) {
               continue;
             }
@@ -575,7 +587,7 @@ const UploadScreen = ({ navigation, route }) => {
           size: processedFile.size ?? null,
           uploadDate: new Date().toLocaleString("th-TH"),
           status: "pending",
-          ocrValidated: docId === "form_101",
+          aiValidated: ["form_101", "consent_student_form", "consent_father_form", "consent_mother_form"].includes(docId),
           fileIndex: (uploads[docId] || []).length + processedFiles.length,
           ...(processedFile.convertedFromImage !== undefined && {
             convertedFromImage: processedFile.convertedFromImage ?? false,
@@ -621,7 +633,7 @@ const UploadScreen = ({ navigation, route }) => {
               const newFiles = docFiles.filter((_, index) => index !== fileIndex);
               
               // Clean up temporary PDF files if they were converted from images
-              if (fileToRemove.originalImage && fileToRemove.uri) {
+              if (fileToRemove.convertedFromImage && fileToRemove.uri) {
                 try {
                   await FileSystem.deleteAsync(fileToRemove.uri, { idempotent: true });
                   console.log('✓ Cleaned up temporary PDF file');
@@ -661,7 +673,7 @@ const UploadScreen = ({ navigation, route }) => {
             onPress: async () => {
               // Clean up temporary PDF files
               for (const file of docFiles) {
-                if (file.originalImage && file.uri) {
+                if (file.convertedFromImage && file.uri) {
                   try {
                     await FileSystem.deleteAsync(file.uri, { idempotent: true });
                   } catch (cleanupError) {
@@ -904,7 +916,7 @@ const UploadScreen = ({ navigation, route }) => {
         let pdfMessage = 'ไฟล์ PDF ต้องใช้แอปพลิเคชันภายนอกในการดู คลิก "เปิดด้วยแอปภายนอก" เพื่อดูไฟล์';
         
         // Add info about converted files
-        if (file.originalImage) {
+        if (file.convertedFromImage) {
           pdfMessage = `ไฟล์ PDF ที่แปลงมาจากรูปภาพ\n(ไฟล์ต้นฉบับ: ${file.originalImageName})\n\n${pdfMessage}`;
         }
         
@@ -966,7 +978,7 @@ const UploadScreen = ({ navigation, route }) => {
     // Count converted files
     const convertedFiles = Object.values(uploads)
       .flat()
-      .filter(file => file.originalImage).length;
+      .filter(file => file.convertedFromImage).length;
     
     return {
       total: documents.length,
@@ -1025,8 +1037,8 @@ const UploadScreen = ({ navigation, route }) => {
         onShowFileModal={handleShowFileModal}
         onDownloadDocument={handleDocumentDownload}
         formatFileSize={formatFileSize}
-        isValidatingOCR={isValidatingOCR}
-        ocrBackendAvailable={ocrBackendAvailable}
+        isValidatingAI={isValidatingAI}
+        aiBackendAvailable={aiBackendAvailable}
         isConvertingToPDF={isConvertingToPDF}
       />
 
