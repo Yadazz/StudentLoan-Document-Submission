@@ -30,14 +30,13 @@ import HeaderSection from "./components/HeaderSection";
 import StatusOverview from "./components/StatusOverview";
 import DocumentCard from "./components/DocumentCard";
 import ActionButtons from "./components/ActionButtons";
+import LoanProcessStatus from "../LoanProcessStatus";
 
-// แก้ไขฟังก์ชัน isReuploadAllowed ให้เช็คสถานะที่ถูกต้อง
 const isReuploadAllowed = (docId, submissionData) => {
   if (!submissionData) {
     return false;
   }
 
-  // เช็คจาก documentStatuses ก่อน (รูปแบบใหม่)
   if (submissionData.documentStatuses && submissionData.documentStatuses[docId]) {
     const status = submissionData.documentStatuses[docId].status;
     return status === "rejected";
@@ -83,8 +82,58 @@ const DocumentStatusScreen = ({ route, navigation }) => {
     return false;
   };
 
+  const getDocumentStats = () => {
+    if (!submissionData?.documentStatuses && !submissionData?.uploads) {
+      return { pending: 0, approved: 0, rejected: 0, uploaded: 0, total: 0, totalFiles: 0 };
+    }
+
+    let statuses = [];
+    let totalFiles = 0;
+
+    if (submissionData.documentStatuses) {
+      statuses = Object.values(submissionData.documentStatuses);
+    } else if (submissionData.uploads) {
+      statuses = Object.values(submissionData.uploads).map(filesData => {
+        const files = Array.isArray(filesData) ? filesData : [filesData];
+        totalFiles += files.length;
+        return { status: files[0]?.status || "pending" };
+      });
+    }
+
+    // นับไฟล์ทั้งหมดถ้ายังไม่ได้นับ
+    if (totalFiles === 0 && submissionData.uploads) {
+      totalFiles = Object.values(submissionData.uploads).reduce((sum, filesData) => {
+        const files = Array.isArray(filesData) ? filesData : [filesData];
+        return sum + files.length;
+      }, 0);
+    }
+
+    // Count converted files
+    let convertedFiles = 0;
+    if (submissionData.uploads) {
+      convertedFiles = Object.values(submissionData.uploads)
+        .flat()
+        .filter(file => file.convertedFromImage).length;
+    }
+
+    return {
+      pending: statuses.filter(doc => doc.status === "pending" || doc.status === "under_review").length,
+      approved: statuses.filter(doc => doc.status === "approved").length,
+      rejected: statuses.filter(doc => doc.status === "rejected").length,
+      uploaded: statuses.filter(doc => doc.status === "uploaded_to_storage").length,
+      total: statuses.length,
+      totalFiles: totalFiles,
+      convertedFiles: convertedFiles
+    };
+  };
+
+  // ฟังก์ชันตรวจสอบว่าเอกสารทุกฉบับได้รับการอนุมัติแล้วหรือไม่
+  const areAllDocumentsApproved = () => {
+    const stats = getDocumentStats();
+    return stats.total > 0 && stats.approved === stats.total;
+  };
+
   // เพิ่มฟังก์ชันอัพโหลดไฟล์ไปยัง Storage
-  // Fix for the uploadFileToStorage function
 const uploadFileToStorage = async (file, docId, fileIndex, userId, studentName, appConfig) => {
   try {
     const fileExtension = getFileExtension(file.filename || file.name || 'unknown');
@@ -900,7 +949,7 @@ const uploadFileToStorage = async (file, docId, fileIndex, userId, studentName, 
         submissionData={submissionData}
         onFilePress={handleOpenStorageFile}
         onReupload={handleReupload}
-        isReuploadAllowed={isReuploadAllowed(docId, submissionData)} // แก้ไขตรงนี้ - ส่ง submissionData เข้าไปด้วย
+        isReuploadAllowed={isReuploadAllowed(docId, submissionData)}
         isUploading={isUploading}
         storageUploadProgress={storageUploadProgress}
         isConvertingToPDF={isConvertingToPDF}
@@ -908,51 +957,9 @@ const uploadFileToStorage = async (file, docId, fileIndex, userId, studentName, 
     ));
   };
 
-  // คำนวดสถิติเอกสาร
-  const getDocumentStats = () => {
-    if (!submissionData?.documentStatuses && !submissionData?.uploads) {
-      return { pending: 0, approved: 0, rejected: 0, uploaded: 0, total: 0, totalFiles: 0 };
-    }
-
-    let statuses = [];
-    let totalFiles = 0;
-
-    if (submissionData.documentStatuses) {
-      statuses = Object.values(submissionData.documentStatuses);
-    } else if (submissionData.uploads) {
-      statuses = Object.values(submissionData.uploads).map(filesData => {
-        const files = Array.isArray(filesData) ? filesData : [filesData];
-        totalFiles += files.length;
-        return { status: files[0]?.status || "pending" };
-      });
-    }
-
-    // นับไฟล์ทั้งหมดถ้ายังไม่ได้นับ
-    if (totalFiles === 0 && submissionData.uploads) {
-      totalFiles = Object.values(submissionData.uploads).reduce((sum, filesData) => {
-        const files = Array.isArray(filesData) ? filesData : [filesData];
-        return sum + files.length;
-      }, 0);
-    }
-
-    // Count converted files
-    let convertedFiles = 0;
-    if (submissionData.uploads) {
-      convertedFiles = Object.values(submissionData.uploads)
-        .flat()
-        .filter(file => file.convertedFromImage).length;
-    }
-
-    return {
-      pending: statuses.filter(doc => doc.status === "pending" || doc.status === "under_review").length,
-      approved: statuses.filter(doc => doc.status === "approved").length,
-      rejected: statuses.filter(doc => doc.status === "rejected").length,
-      uploaded: statuses.filter(doc => doc.status === "uploaded_to_storage").length,
-      total: statuses.length,
-      totalFiles: totalFiles,
-      convertedFiles: convertedFiles
-    };
-  };
+  if (areAllDocumentsApproved()) {
+  return <LoanProcessStatus navigation={navigation} />;
+}
 
   // แสดง Loading Screen
   if (isLoading) {
