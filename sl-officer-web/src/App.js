@@ -12,6 +12,7 @@ import PostEditScreen from "./PostEditScreen.web";
 import StudentInfo from "./Studentinfo";
 import StudentDocument from "./StdDocumentService";
 import DocumentSubmission from "./StudentDocumentSubmission";
+import LoanProcessManagement from "./LoanProcessManagement";
 
 export default function App() {
   return (
@@ -29,6 +30,10 @@ export default function App() {
             <Route
               path="/document-submission"
               element={<DocumentSubmission />}
+            />
+            <Route
+              path="/loan-process"
+              element={<LoanProcessManagement />}
             />
           </Routes>
         </div>
@@ -120,6 +125,13 @@ function Sidebar() {
               active={selected === "DocumentSubmission"}
               onClick={() =>
                 handleNavigate("/document-submission", "DocumentSubmission")
+              }
+            />
+            <SidebarItem
+              label="จัดการสถานะกู้ยืม"
+              active={selected === "LoanProcess"}
+              onClick={() =>
+                handleNavigate("/loan-process", "LoanProcess")
               }
             />
           </div>
