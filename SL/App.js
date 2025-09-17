@@ -12,14 +12,14 @@ import { doc, onSnapshot } from "firebase/firestore";
 // Import all screens
 import HomeScreen from "./student/HomeScreen";
 import UploadScreen from "./student/UploadScreen/UploadScreen";
-import SettingsScreen from "./student/SettingScreen";
+import SettingsScreen from "./student/Settings/SettingScreen";
 import DocRecScreen from "./student/DocRecScreen/DocRecScreen";
 import NewsContent from "./student/NewsContent";
-import ProfileScreen from "./student/ProfileScreen";
+import ProfileScreen from "./student/Settings/ProfileScreen";
+import DocumentsHistoryScreen from "./student/Settings/DocumentsHistoryScreen";
 import LoginScreen from "./LoginScreen";
 import SignUpScreen from "./SignUpScreen";
 import InsertForm from "./student/InsertForm";
-import OCR from "./model/EasyOcr/OCR";
 import DocumentStatusScreen from "./student/DocumentStatusScreen/DocumentStatusScreen";
 import DocCooldown from "./student/components/DocCooldown";
 
@@ -109,8 +109,6 @@ const MainTabs = () => (
         if (route.name === "หน้าหลัก") iconName = "home-outline";
         else if (route.name === "ส่งเอกสาร") iconName = "document-text-outline";
         else if (route.name === "ตั้งค่า") iconName = "settings-outline";
-        else if (route.name === "กรอกเอกสาร") iconName = "create-outline";
-        else if (route.name === "OCR") iconName = "eye-outline";
         return <Ionicons name={iconName} size={size} color={color} />;
       },
     })}
@@ -118,8 +116,6 @@ const MainTabs = () => (
     <Tab.Screen name="หน้าหลัก" component={HomeStack} />
     <Tab.Screen name="ส่งเอกสาร" component={UploadStack} />
     <Tab.Screen name="ตั้งค่า" component={SettingsScreen} />
-    <Tab.Screen name="กรอกเอกสาร" component={InsertForm} />
-    <Tab.Screen name="OCR" component={OCR} />
   </Tab.Navigator>
 );
 
@@ -167,7 +163,11 @@ const App = () => {
         >
           <Stack.Screen name="LoginScreen" component={LoginScreen} />
           <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
-          <Stack.Screen name="MainTabs" component={MainTabs} />
+          <Stack.Screen
+            name="MainTabs"
+            component={MainTabs}
+            options={{ headerLeft: true, title: "" }}
+          />
           <Stack.Screen
             name="Document Reccommend"
             component={DocRecScreen}
@@ -203,6 +203,11 @@ const App = () => {
               title: "สถานะระบบ",
               headerLeft: null, // Prevent going back
             }}
+          />
+          <Stack.Screen
+            name="DocumentsHistoryScreen"
+            component={DocumentsHistoryScreen}
+            options={{ title: "ประวัติเอกสาร", headerShown: true }}
           />
         </Stack.Navigator>
       </NavigationContainer>
