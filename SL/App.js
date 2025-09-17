@@ -7,7 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "./database/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, getDoc } from "firebase/firestore";
 
 // Import all screens
 import HomeScreen from "./student/HomeScreen";
@@ -19,9 +19,9 @@ import ProfileScreen from "./student/Settings/ProfileScreen";
 import DocumentsHistoryScreen from "./student/Settings/DocumentsHistoryScreen";
 import LoginScreen from "./LoginScreen";
 import SignUpScreen from "./SignUpScreen";
-import InsertForm from "./student/InsertForm";
 import DocumentStatusScreen from "./student/DocumentStatusScreen/DocumentStatusScreen";
 import DocCooldown from "./student/components/DocCooldown";
+import LoanProcessStatus from "./student/LoanProcessStatus";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -42,14 +42,105 @@ const HomeStack = () => (
   </Stack.Navigator>
 );
 
-const UploadStack = () => {
-  const [isEnabled, setIsEnabled] = useState(null);
+// Component to check document approval status and render appropriate screen
+const DocumentManagement = () => {
+  const [allDocsApproved, setAllDocsApproved] = useState(false);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
-    // Listen for changes in Firestore
+    const user = auth.currentUser;
+    if (user) {
+      setCurrentUser(user);
+      checkDocumentApprovalStatus(user.uid);
+    } else {
+      setIsCheckingStatus(false);
+    }
+  }, []);
+
+  const checkDocumentApprovalStatus = async (userId) => {
+    try {
+      // Get app config to determine current term
+      const configRef = doc(db, 'DocumentService', 'config');
+      const configDoc = await getDoc(configRef);
+      let collectionName = 'document_submissions';
+      
+      if (configDoc.exists()) {
+        const config = configDoc.data();
+        const termId = `${config.academicYear}_${config.term}`;
+        collectionName = `document_submissions_${termId}`;
+      }
+
+      // Set up real-time listener for user's document submissions
+      const userDocRef = doc(db, collectionName, userId);
+      const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const submissionData = docSnap.data();
+          const isAllApproved = checkIfAllDocumentsApproved(submissionData);
+          setAllDocsApproved(isAllApproved);
+        } else {
+          setAllDocsApproved(false);
+        }
+        setIsCheckingStatus(false);
+      });
+
+      return unsubscribe;
+    } catch (error) {
+      console.error("Error checking document approval status:", error);
+      setAllDocsApproved(false);
+      setIsCheckingStatus(false);
+    }
+  };
+
+  const checkIfAllDocumentsApproved = (submissionData) => {
+    if (!submissionData) return false;
+
+    // Check using new documentStatuses structure
+    if (submissionData.documentStatuses) {
+      const statuses = Object.values(submissionData.documentStatuses);
+      if (statuses.length === 0) return false;
+      
+      // All documents must be approved
+      return statuses.every(doc => doc.status === "approved");
+    }
+
+    // Fallback to old structure for backward compatibility
+    if (submissionData.uploads) {
+      const uploads = Object.values(submissionData.uploads);
+      if (uploads.length === 0) return false;
+      
+      return uploads.every(upload => {
+        const files = Array.isArray(upload) ? upload : [upload];
+        return files.every(file => file.status === "approved");
+      });
+    }
+
+    return false;
+  };
+
+  if (isCheckingStatus) {
+    return <LoadingScreen />;
+  }
+
+  // If all documents are approved, show loan process status
+  if (allDocsApproved) {
+    return <LoanProcessStatus />;
+  }
+
+  // Otherwise, show document status screen
+  return <DocumentStatusScreen />;
+};
+
+const UploadStack = () => {
+  const [isEnabled, setIsEnabled] = useState(null);
+  const [hasSubmittedDocs, setHasSubmittedDocs] = useState(false);
+  const [isCheckingSubmission, setIsCheckingSubmission] = useState(true);
+
+  useEffect(() => {
+    // Listen for changes in Firestore config
     const docRef = doc(db, "DocumentService", "config");
 
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+    const configUnsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         const config = docSnap.data();
         // Check immediateAccess and isEnabled values
@@ -59,11 +150,35 @@ const UploadStack = () => {
       }
     });
 
-    return () => unsubscribe();
+    // Check if user has submitted documents
+    const checkUserSubmission = () => {
+      const user = auth.currentUser;
+      if (user) {
+        const userRef = doc(db, "users", user.uid);
+        const userUnsubscribe = onSnapshot(userRef, (userDoc) => {
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setHasSubmittedDocs(userData.hasSubmittedDocuments || false);
+          }
+          setIsCheckingSubmission(false);
+        });
+        return userUnsubscribe;
+      } else {
+        setIsCheckingSubmission(false);
+        return null;
+      }
+    };
+
+    const userUnsubscribe = checkUserSubmission();
+
+    return () => {
+      configUnsubscribe();
+      if (userUnsubscribe) userUnsubscribe();
+    };
   }, []);
 
   // Show loading screen while fetching data
-  if (isEnabled === null) {
+  if (isEnabled === null || isCheckingSubmission) {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Loading" component={LoadingScreen} />
@@ -75,7 +190,11 @@ const UploadStack = () => {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen
         name="UploadMain"
-        component={isEnabled ? UploadScreen : DocCooldown}
+        component={
+          hasSubmittedDocs 
+            ? DocumentManagement 
+            : (isEnabled ? UploadScreen : DocCooldown)
+        }
       />
       <Stack.Screen
         name="DocumentStatusScreen"
@@ -83,6 +202,21 @@ const UploadStack = () => {
         options={{
           title: "สถานะเอกสาร",
           headerShown: false,
+          headerStyle: {
+            backgroundColor: "#2563eb",
+          },
+          headerTintColor: "#ffffff",
+          headerTitleStyle: {
+            fontWeight: "bold",
+          },
+        }}
+      />
+      <Stack.Screen
+        name="LoanProcessStatus"
+        component={LoanProcessStatus}
+        options={{
+          title: "สถานะการดำเนินการ",
+          headerShown: true,
           headerStyle: {
             backgroundColor: "#2563eb",
           },
@@ -163,11 +297,7 @@ const App = () => {
         >
           <Stack.Screen name="LoginScreen" component={LoginScreen} />
           <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
-          <Stack.Screen
-            name="MainTabs"
-            component={MainTabs}
-            options={{ headerLeft: true, title: "" }}
-          />
+          <Stack.Screen name="MainTabs" component={MainTabs} />
           <Stack.Screen
             name="Document Reccommend"
             component={DocRecScreen}
@@ -185,6 +315,22 @@ const App = () => {
             options={{
               title: "สถานะเอกสาร",
               headerShown: false,
+              headerStyle: {
+                backgroundColor: "#2563eb",
+              },
+              headerTintColor: "#ffffff",
+              headerTitleStyle: {
+                fontWeight: "bold",
+              },
+            }}
+          />
+          {/* Add LoanProcessStatus */}
+          <Stack.Screen
+            name="LoanProcessStatus"
+            component={LoanProcessStatus}
+            options={{
+              title: "สถานะการดำเนินการ",
+              headerShown: true,
               headerStyle: {
                 backgroundColor: "#2563eb",
               },
