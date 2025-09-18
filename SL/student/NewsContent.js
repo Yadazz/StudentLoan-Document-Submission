@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,13 +9,69 @@ import {
   Linking,
   Dimensions,
   SafeAreaView,
+  ActivityIndicator,
 } from "react-native";
 import RenderHtml from "react-native-render-html";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../database/firebase"; // Adjust path as needed
 
-// props: item = object ของข่าวที่ส่งมาจาก FlatList
 const NewsContent = ({ route }) => {
-  const { item } = route.params; // รับ item จาก navigation
+  // Debug: Log what we received
+
+  const { newsId, item: passedItem } = route.params || {}; // Get both newsId and item from navigation
+  const [item, setItem] = useState(passedItem || null);
+  const [loading, setLoading] = useState(!passedItem); // Don't load if item is already passed
   const { width } = Dimensions.get("window");
+
+  // Debug: Log the extracted values
+  console.log("passedItem:", passedItem ? "exists" : "null");
+
+  // Fetch news item by ID
+  useEffect(() => {
+    // If item is already passed, don't fetch
+    if (passedItem) {
+      return;
+    }
+
+    // If no newsId, can't fetch
+    if (!newsId) {
+      console.error("No newsId provided");
+      setLoading(false);
+      return;
+    }
+
+    const fetchNewsItem = async () => {
+      try {
+        console.log("Fetching news item with ID:", newsId);
+        const docRef = doc(db, "news", newsId);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          const docData = docSnap.data();
+          setItem({
+            id: docSnap.id,
+            title: docData.title || "",
+            description: docData.description || "",
+            bannerURL: docData.bannerURL || "",
+            postType: docData.postType || "ทั่วไป",
+            createdAt: docData.createdAt || null,
+            documentName: docData.documentName || "",
+            documentURL: docData.documentURL || "",
+            mediaURLs: docData.mediaURLs || [],
+            ...docData,
+          });
+        } else {
+          console.log("No such document with ID:", newsId);
+        }
+      } catch (error) {
+        console.error("Error fetching news item: ", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchNewsItem();
+  }, [newsId, passedItem]);
 
   // ฟังก์ชันเปิดไฟล์ Document (PDF) ถ้ามี
   const openDocument = (url) => {
@@ -50,6 +106,27 @@ const NewsContent = ({ route }) => {
       );
     });
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.loadingText}>กำลังโหลด...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!item) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.errorText}>ไม่พบข้อมูลข่าว</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -105,6 +182,20 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flex: 1,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: "#666",
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#f44336",
+  },
   titleContainer: {
     marginBottom: 10,
   },
@@ -146,7 +237,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "500",
   },
-  // เราจะไม่ใช้ description ในส่วนนี้แล้ว แต่จะใช้ tagsStyles แทน
 });
 
 const htmlStyles = {
@@ -159,7 +249,6 @@ const htmlStyles = {
   strong: {
     fontWeight: "bold",
   },
-  // สามารถเพิ่ม style สำหรับ tag อื่นๆ ได้ตามต้องการ เช่น
   em: {
     fontStyle: "italic",
   },

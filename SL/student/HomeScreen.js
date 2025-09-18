@@ -136,8 +136,7 @@ const HomeScreen = ({ navigation }) => {
     <TouchableOpacity
       style={styles.newsItem}
       onPress={() => {
-        // Navigate to news detail screen
-        // navigation.navigate('NewsDetail', { newsId: item.id });
+        navigation.navigate("NewsContentScreen", { item: item });
       }}
     >
       {item.bannerURL ? (
