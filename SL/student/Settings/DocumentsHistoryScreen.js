@@ -579,6 +579,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f1f5f9", // สีพื้นอ่อน
+    padding: 10,
   },
 
   loadingContainer: {
@@ -839,3 +840,4 @@ const styles = StyleSheet.create({
 });
 
 export default DocumentsHistoryScreen;
+
